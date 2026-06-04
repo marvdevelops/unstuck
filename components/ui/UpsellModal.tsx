@@ -33,7 +33,7 @@ const UPSELL_CONFIGS: Record<string, UpsellConfig> = {
   },
   cohort: {
     tier: 'cohort',
-    headline: 'You Don't Have to Do This Alone',
+    headline: "You Don't Have to Do This Alone",
     subheadline: 'People who change together, stay changed.',
     bullets: [
       'Everything in Basic',
@@ -48,7 +48,7 @@ const UPSELL_CONFIGS: Record<string, UpsellConfig> = {
   vip: {
     tier: 'vip',
     headline: 'Go All In',
-    subheadline: 'For the person who's done with half-measures.',
+    subheadline: "For the person who's done with half-measures.",
     bullets: [
       'Everything in Live Cohort',
       '1-on-1 VIP session with Coach Erik',

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zerocompany.unstuck21"
+      "bundleIdentifier": "com.zerocompany.unstuck21",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.zerocompany.unstuck21",
@@ -26,8 +29,6 @@
     },
     "plugins": [
       "expo-router",
-      "expo-status-bar",
-      "expo-video",
       "expo-font"
     ],
     "extra": {

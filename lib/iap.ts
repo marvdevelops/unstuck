@@ -1,15 +1,4 @@
 import { Platform, Alert } from 'react-native';
-import {
-  initConnection,
-  endConnection,
-  fetchProducts,
-  requestPurchase,
-  purchaseUpdatedListener,
-  purchaseErrorListener,
-  finishTransaction,
-  getReceiptIOS,
-  ErrorCode,
-} from 'react-native-iap';
 import { api } from './api';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -21,20 +10,37 @@ export const PRODUCT_IDS = {
   alumni: 'unstuck21_alumni',  // ₱749 alumni re-entry
 };
 
-let purchaseUpdateSub: ReturnType<typeof purchaseUpdatedListener> | null = null;
-let purchaseErrorSub: ReturnType<typeof purchaseErrorListener> | null = null;
+// Lazy-load react-native-iap so Expo Go doesn't crash on startup
+// (react-native-iap requires a native build — not available in Expo Go)
+let iap: typeof import('react-native-iap') | null = null;
+async function getIAP() {
+  if (iap) return iap;
+  try {
+    iap = await import('react-native-iap');
+    return iap;
+  } catch {
+    return null;
+  }
+}
+
+let purchaseUpdateSub: { remove: () => void } | null = null;
+let purchaseErrorSub: { remove: () => void } | null = null;
 
 export async function setupIAP() {
+  const lib = await getIAP();
+  if (!lib) {
+    console.log('IAP: react-native-iap not available (Expo Go). Purchases disabled.');
+    return;
+  }
   try {
-    await initConnection();
+    await lib.initConnection();
 
-    purchaseUpdateSub = purchaseUpdatedListener(async (purchase) => {
+    purchaseUpdateSub = lib.purchaseUpdatedListener(async (purchase) => {
       try {
         const platform = Platform.OS as 'ios' | 'android';
-
         let receipt: string;
         if (platform === 'ios') {
-          receipt = await getReceiptIOS();
+          receipt = await lib.getReceiptIOS();
         } else {
           receipt = (purchase as any).purchaseToken ?? purchase.transactionId ?? '';
         }
@@ -46,15 +52,15 @@ export async function setupIAP() {
 
         const { user } = await api.iap.verify(platform, receipt, purchase.productId);
         useAuthStore.getState().updateUser(user);
-        await finishTransaction({ purchase, isConsumable: false });
+        await lib.finishTransaction({ purchase, isConsumable: false });
         Alert.alert('Purchase successful! 🎉', 'Your tier has been upgraded.');
       } catch (err: any) {
         Alert.alert('Verification failed', err.message ?? 'Please contact support.');
       }
     });
 
-    purchaseErrorSub = purchaseErrorListener((error) => {
-      if (error.code !== ErrorCode.UserCancelled) {
+    purchaseErrorSub = lib.purchaseErrorListener((error) => {
+      if (error.code !== lib!.ErrorCode.UserCancelled) {
         Alert.alert('Purchase error', error.message);
       }
     });
@@ -66,15 +72,22 @@ export async function setupIAP() {
 export function teardownIAP() {
   purchaseUpdateSub?.remove();
   purchaseErrorSub?.remove();
-  endConnection();
+  getIAP().then((lib) => lib?.endConnection());
 }
 
 export async function loadProducts() {
-  return fetchProducts({ skus: Object.values(PRODUCT_IDS) });
+  const lib = await getIAP();
+  if (!lib) return [];
+  return lib.fetchProducts({ skus: Object.values(PRODUCT_IDS) });
 }
 
 export async function purchaseTier(productId: string) {
-  await requestPurchase({
+  const lib = await getIAP();
+  if (!lib) {
+    Alert.alert('Purchases unavailable', 'Please install the full app to make purchases.');
+    return;
+  }
+  await lib.requestPurchase({
     request: {
       apple: { sku: productId },
       google: { skus: [productId] },

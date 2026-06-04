@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useAudioStore } from '../../store/useAudioStore';
 import { Colors } from '../../constants/colors';
 import { FontSizes } from '../../constants/typography';
@@ -17,37 +17,27 @@ export default function VideoPlayer({ uri, dayNum, watched, onMarkWatched }: Pro
   const setAmbientVolume = useAudioStore((s) => s.setAmbientVolume);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const videoRef = useRef<Video>(null);
 
-  const player = useVideoPlayer(uri ?? null, (p) => {
-    p.loop = false;
-  });
-
-  // Dim ambient audio when video is playing; restore when paused/stopped
-  useEffect(() => {
-    const sub = player.addListener('playingChange', ({ isPlaying }) => {
-      setAmbientVolume(isPlaying ? 0 : 0.2);
-    });
-    return () => sub.remove();
-  }, [player]);
-
-  // Track playback progress — duration lives on player.duration, not the event
-  useEffect(() => {
-    const sub = player.addListener('timeUpdate', ({ currentTime }) => {
-      const d = player.duration ?? 0;
-      if (d > 0) {
-        setProgress(currentTime / d);
-        setDuration(d);
-      }
-    });
-    return () => sub.remove();
-  }, [player]);
+  const handleStatus = (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+    const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
+    const pos = status.positionMillis ? status.positionMillis / 1000 : 0;
+    if (dur > 0) {
+      setDuration(dur);
+      setProgress(pos / dur);
+    }
+    // Dim ambient when playing, restore when paused
+    setAmbientVolume(status.isPlaying ? 0 : 0.2);
+  };
 
   // Auto-mark watched at 90% completion
   useEffect(() => {
     if (!watched && progress >= 0.9) onMarkWatched();
   }, [progress, watched]);
 
-  const fmt = (secs: number) => `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
+  const fmt = (secs: number) =>
+    `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
 
   const WatchedButton = () => (
     <TouchableOpacity
@@ -73,11 +63,13 @@ export default function VideoPlayer({ uri, dayNum, watched, onMarkWatched }: Pro
 
   return (
     <View style={styles.container}>
-      <VideoView
-        player={player}
+      <Video
+        ref={videoRef}
+        source={{ uri }}
         style={styles.video}
-        contentFit="contain"
-        nativeControls
+        resizeMode={ResizeMode.CONTAIN}
+        useNativeControls
+        onPlaybackStatusUpdate={handleStatus}
       />
 
       <View style={styles.progressTrack}>
