@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { MotiView } from 'moti';
+import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
 import { Fonts, FontSizes } from '../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../constants/spacing';
 import { purchaseTier, PRODUCT_IDS } from '../../lib/iap';
 import { useAuthStore } from '../../store/useAuthStore';
+import { Check } from '../../lib/icons';
 
 interface UpsellConfig {
   tier: 'basic' | 'cohort' | 'vip';
@@ -29,7 +34,7 @@ const UPSELL_CONFIGS: Record<string, UpsellConfig> = {
     ],
     price: '₱1,499',
     cta: 'Unlock All 21 Days',
-    accent: Colors.primaryBlue,
+    accent: Colors.tide,
   },
   cohort: {
     tier: 'cohort',
@@ -43,7 +48,7 @@ const UPSELL_CONFIGS: Record<string, UpsellConfig> = {
     ],
     price: '₱7,499',
     cta: 'Join the Live Cohort',
-    accent: Colors.successGreen,
+    accent: Colors.success,
   },
   vip: {
     tier: 'vip',
@@ -57,7 +62,7 @@ const UPSELL_CONFIGS: Record<string, UpsellConfig> = {
     ],
     price: '₱13,999',
     cta: 'Claim VIP Access',
-    accent: Colors.amber,
+    accent: Colors.gold,
   },
 };
 
@@ -72,7 +77,6 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
   const user = useAuthStore((s) => s.user);
   const config = UPSELL_CONFIGS[upsellType];
 
-  // Don't show if user already has this tier or higher
   const TIER_ORDER = ['free', 'basic', 'cohort', 'vip', 'alumni'];
   const userTierIdx = TIER_ORDER.indexOf(user?.tier ?? 'free');
   const upsellTierIdx = TIER_ORDER.indexOf(upsellType);
@@ -82,7 +86,6 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
     setLoading(true);
     try {
       await purchaseTier(PRODUCT_IDS[config.tier]);
-      // purchaseUpdatedListener in iap.ts handles the rest
     } catch (err: any) {
       if (err?.code !== 'E_USER_CANCELLED') {
         Alert.alert('Purchase failed', err.message ?? 'Please try again.');
@@ -93,48 +96,82 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
     }
   };
 
+  const handleOpen = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          {/* Accent bar */}
-          <View style={[styles.accentBar, { backgroundColor: config.accent }]} />
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onDismiss}
+      onShow={handleOpen}
+    >
+      <BlurView intensity={45} tint="dark" style={styles.overlay}>
+        <View style={styles.overlayDark} />
+        <MotiView
+          from={{ translateY: 20, opacity: 0 }}
+          animate={{ translateY: 0, opacity: 1 }}
+          transition={{ type: 'spring', damping: 22 }}
+          style={styles.sheetWrapper}
+        >
+        <LinearGradient colors={['#FFFFFF', '#F4F8FA']} style={styles.sheet}>
+          {/* Accent bar — reveals on mount */}
+          <MotiView
+            from={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ type: 'spring', damping: 20 }}
+            style={[styles.accentBar, { backgroundColor: config.accent }]}
+          />
 
           <Text style={styles.headline}>{config.headline}</Text>
           <Text style={styles.subheadline}>{config.subheadline}</Text>
 
           <View style={styles.bullets}>
             {config.bullets.map((b, i) => (
-              <View key={i} style={styles.bulletRow}>
-                <Text style={[styles.bulletCheck, { color: config.accent }]}>✓</Text>
+              <MotiView
+                key={i}
+                from={{ opacity: 0, translateX: -8 }}
+                animate={{ opacity: 1, translateX: 0 }}
+                transition={{ type: 'timing', duration: 350, delay: i * 60 + 200 }}
+                style={styles.bulletRow}
+              >
+                <Check size={14} color={config.accent} />
                 <Text style={styles.bulletText}>{b}</Text>
-              </View>
+              </MotiView>
             ))}
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>One-time payment</Text>
+            <View>
+              <Text style={styles.priceLabel}>One-time · no subscription</Text>
+            </View>
             <Text style={[styles.price, { color: config.accent }]}>{config.price}</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.ctaBtn, { backgroundColor: config.accent }]}
-            onPress={handlePurchase}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.ctaText}>{config.cta}</Text>
-            )}
+          <TouchableOpacity onPress={handlePurchase} disabled={loading} activeOpacity={0.85}>
+            <LinearGradient
+              colors={config.accent === Colors.gold ? Colors.gradients.ctaGold : config.accent === Colors.success ? Colors.gradients.success : Colors.gradients.cta}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.ctaBtn}
+            >
+              {loading
+                ? <View style={styles.loadingRow}>
+                    <ActivityIndicator color={Colors.white} size="small" />
+                    <Text style={styles.ctaText}>Processing...</Text>
+                  </View>
+                : <Text style={styles.ctaText}>{config.cta}</Text>
+              }
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss}>
             <Text style={styles.dismissText}>Maybe later</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </LinearGradient>
+        </MotiView>
+      </BlurView>
     </Modal>
   );
 }
@@ -142,53 +179,52 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(7,26,52,0.6)',
     justifyContent: 'flex-end',
   },
+  overlayDark: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.glass.darkStrong,
+  },
+  sheetWrapper: {
+    borderTopLeftRadius: Radius.modal,
+    borderTopRightRadius: Radius.modal,
+    overflow: 'hidden',
+    ...Shadows.modal,
+  },
   sheet: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     padding: Spacing.xl,
     gap: Spacing.md,
-    paddingBottom: 48,
-    ...Shadows.card,
+    paddingBottom: 52,
   },
   accentBar: {
-    height: 4,
-    borderRadius: 2,
-    width: 48,
-    alignSelf: 'center',
-    marginBottom: Spacing.sm,
+    height: 4, borderRadius: 2, width: 48,
+    alignSelf: 'center', marginBottom: Spacing.sm,
   },
   headline: {
-    fontSize: FontSizes['2xl'],
-    fontFamily: Fonts.display,
-    color: Colors.darkNavy,
-    textAlign: 'center',
+    fontSize: FontSizes['2xl'], fontFamily: Fonts.display,
+    color: Colors.ink, textAlign: 'center',
   },
   subheadline: {
-    fontSize: FontSizes.base,
-    fontFamily: Fonts.body,
-    color: Colors.mutedTeal,
-    textAlign: 'center',
-    lineHeight: 24,
+    fontSize: FontSizes.base, fontFamily: Fonts.display, fontStyle: 'italic',
+    color: Colors.inkMuted, textAlign: 'center', lineHeight: 24,
   },
-  bullets: { gap: Spacing.sm, marginTop: Spacing.sm },
+  bullets: { gap: Spacing.sm + 2, marginTop: Spacing.sm },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bulletCheck: { fontSize: FontSizes.base, fontFamily: Fonts.bodyBold, lineHeight: 24 },
-  bulletText: { flex: 1, fontSize: FontSizes.base, fontFamily: Fonts.body, color: Colors.darkNavy, lineHeight: 24 },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.sm },
-  priceLabel: { fontSize: FontSizes.sm, fontFamily: Fonts.body, color: Colors.mutedTeal },
+  bulletText: { flex: 1, fontSize: FontSizes.base, fontFamily: Fonts.body, color: Colors.inkSoft, lineHeight: 24 },
+  priceRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1, borderTopColor: Colors.sandBorder,
+  },
+  priceLabel: { fontSize: FontSizes.sm, fontFamily: Fonts.body, color: Colors.inkMuted },
   price: { fontSize: FontSizes['2xl'], fontFamily: Fonts.display },
   ctaBtn: {
-    height: 56,
-    borderRadius: Radius.tag,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.sm,
+    height: 60, borderRadius: Radius.tag,
+    alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm,
   },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ctaText: { fontSize: FontSizes.base, fontFamily: Fonts.bodyBold, color: Colors.white },
   dismissBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
-  dismissText: { fontSize: FontSizes.sm, fontFamily: Fonts.body, color: Colors.mutedTeal },
+  dismissText: { fontSize: FontSizes.sm, fontFamily: Fonts.body, color: Colors.inkFaint },
 });

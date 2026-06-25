@@ -8,13 +8,15 @@ import { FontSizes } from '../../constants/typography';
 import { Spacing, Radius } from '../../constants/spacing';
 import { useUserStore, StuckPattern } from '../../store/useUserStore';
 import ProgressDots from '../../components/ui/ProgressDots';
+import { Check, RefreshCw, Cloud, Target, Compass, Flame } from '../../lib/icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const OPTIONS: { emoji: string; title: string; sub: string; value: StuckPattern }[] = [
-  { emoji: '🌀', title: "I keep starting over.", sub: "I build momentum, then lose it. Over and over.", value: 'restart_loop' },
-  { emoji: '💭', title: "My mind won't quiet down.", sub: "I'm overwhelmed, anxious, or running on empty.", value: 'overwhelm' },
-  { emoji: '📵', title: "I can't focus on what actually matters.", sub: "Distractions win. My best work never happens.", value: 'focus' },
-  { emoji: '🔋', title: "I've lost my sense of direction.", sub: "I'm going through the motions but feel disconnected.", value: 'direction' },
-  { emoji: '🔥', title: "Everything feels urgent but nothing moves forward.", sub: "I'm busy but not productive. Spinning in place.", value: 'urgency' },
+const OPTIONS: { Icon: React.ComponentType<any>; title: string; sub: string; value: StuckPattern }[] = [
+  { Icon: RefreshCw, title: "I keep starting over.", sub: "I build momentum, then lose it. Over and over.", value: 'restart_loop' },
+  { Icon: Cloud,     title: "My mind won't quiet down.", sub: "I'm overwhelmed, anxious, or running on empty.", value: 'overwhelm' },
+  { Icon: Target,    title: "I can't focus on what actually matters.", sub: "Distractions win. My best work never happens.", value: 'focus' },
+  { Icon: Compass,   title: "I've lost my sense of direction.", sub: "I'm going through the motions but feel disconnected.", value: 'direction' },
+  { Icon: Flame,     title: "Everything feels urgent but nothing moves forward.", sub: "I'm busy but not productive. Spinning in place.", value: 'urgency' },
 ];
 
 export default function Diagnosis() {
@@ -39,19 +41,35 @@ export default function Diagnosis() {
         {OPTIONS.map((opt) => {
           const isSelected = selected === opt.value;
           const isDimmed = selected !== null && !isSelected;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              style={[styles.card, isSelected && styles.cardSelected, isDimmed && styles.cardDimmed]}
-              onPress={() => handleSelect(opt.value)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emoji}>{opt.emoji}</Text>
+          const cardContent = (
+            <>
+              <View style={styles.iconWrap}>
+                <opt.Icon size={20} color={isSelected ? Colors.tideMid : Colors.white75} />
+              </View>
               <View style={styles.cardText}>
                 <Text style={[styles.cardTitle, isSelected && styles.cardTitleSelected]}>{opt.title}</Text>
                 <Text style={styles.cardSub}>{opt.sub}</Text>
               </View>
-              {isSelected && <Text style={styles.check}>✓</Text>}
+              {isSelected && <Check size={16} color={Colors.tideMid} />}
+            </>
+          );
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={isDimmed && styles.cardDimmed}
+              onPress={() => handleSelect(opt.value)}
+              activeOpacity={0.8}
+            >
+              {isSelected ? (
+                <LinearGradient
+                  colors={['rgba(46,110,128,0.32)', 'rgba(46,110,128,0.14)']}
+                  style={[styles.card, styles.cardSelected]}
+                >
+                  {cardContent}
+                </LinearGradient>
+              ) : (
+                <View style={styles.card}>{cardContent}</View>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -92,16 +110,15 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   cardSelected: {
-    borderColor: Colors.primaryBlue,
-    borderLeftWidth: 4,
+    borderColor: Colors.tide + 'AA',
+    borderWidth: 1.5,
   },
   cardDimmed: { opacity: 0.6 },
-  emoji: { fontSize: 24, width: 32, textAlign: 'center' },
+  iconWrap: { width: 32, alignItems: 'center' },
   cardText: { flex: 1 },
   cardTitle: { color: Colors.white, fontSize: FontSizes.base, fontWeight: '600' },
-  cardTitleSelected: { color: Colors.primaryBlue },
+  cardTitleSelected: { color: Colors.tideMid },
   cardSub: { color: Colors.white75, fontSize: FontSizes.xs, marginTop: 2 },
-  check: { color: Colors.primaryBlue, fontSize: FontSizes.base, fontWeight: '700' },
   ctaWrapper: { position: 'absolute', bottom: 40, left: Spacing.lg, right: Spacing.lg },
   cta: {
     backgroundColor: Colors.primaryBlue,

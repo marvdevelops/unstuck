@@ -8,6 +8,7 @@ module.exports = {
   initConnection: noopAsync,
   endConnection: noopAsync,
   fetchProducts: async () => [],
+  getAvailablePurchases: async () => [],
   requestPurchase: noopAsync,
   finishTransaction: noopAsync,
   getReceiptIOS: async () => '',

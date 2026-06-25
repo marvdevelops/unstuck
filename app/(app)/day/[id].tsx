@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ScrollView, View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   TextInput, Alert, Modal, Dimensions,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import { MotiView } from 'moti';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, BookOpen, Star, Lock, Award, Unlock, CheckCircle, Compass } from '../../../lib/icons';
 import { useJourneyStore } from '../../../store/useJourneyStore';
 import { useToolStore } from '../../../store/useToolStore';
 import { useUserStore } from '../../../store/useUserStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import UpsellModal from '../../../components/ui/UpsellModal';
+import CoreValuesWizard from '../../../components/journey/CoreValuesWizard';
+import { sendCompletionNotification } from '../../../lib/notifications';
 import { CURRICULUM } from '../../../constants/curriculum';
 import { Colors } from '../../../constants/colors';
 import { Fonts, FontSizes } from '../../../constants/typography';
@@ -20,6 +26,14 @@ import VideoPlayer from '../../../components/journey/VideoPlayer';
 import Card from '../../../components/ui/Card';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+const DAY_JOURNAL_PROMPTS = [
+  'What shifted for you today?',
+  'Where did you feel resistance?',
+  'What are you noticing about yourself?',
+  'What went better than expected?',
+  'What would you tell yesterday\'s version of you?',
+];
 
 export default function DayWorkspace() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,17 +47,46 @@ export default function DayWorkspace() {
     isDayComplete, hardStopActive,
   } = useJourneyStore();
   const { logStealer } = useToolStore();
+  const stealersLog = useToolStore((s) => s.stealersLog);
+  const stealers = Object.entries(stealersLog)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 
   const accountabilityStyle = useUserStore((s) => s.onboarding.accountability_style);
+  const coreValues          = useUserStore((s) => s.coreValues);
+  const setCoreValues       = useUserStore((s) => s.setCoreValues);
   const userTier = useAuthStore((s) => s.user?.tier ?? 'free');
 
-  const [stealerInput, setStealerInput] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [upsellType, setUpsellType] = useState<'basic' | 'cohort' | 'vip' | null>(null);
-  const confettiRef = useRef<ConfettiCannon>(null);
+  // Paywall guard — free users can only access Days 1–5
+  const FREE_DAY_LIMIT = 5;
+  const [paywallVisible, setPaywallVisible] = useState(false);
 
   useEffect(() => {
-    if (dayData) initDay(dayNum, dayData.routine.length, dayData.spot.length);
+    if (userTier === 'free' && dayNum > FREE_DAY_LIMIT) {
+      setPaywallVisible(true);
+    }
+  }, [dayNum, userTier]);
+
+  const [stealerInput, setStealerInput] = useState('');
+  const [stealerFocused, setStealerFocused] = useState(false);
+  const [journalFocused, setJournalFocused] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [upsellType, setUpsellType] = useState<'basic' | 'cohort' | 'vip' | null>(null);
+  const [wizardVisible, setWizardVisible] = useState(false);
+  const confettiRef = useRef<ConfettiCannon>(null);
+
+  const promptIndex = dayNum % DAY_JOURNAL_PROMPTS.length;
+  const journalPlaceholder = DAY_JOURNAL_PROMPTS[promptIndex];
+
+  useEffect(() => {
+    if (dayData) {
+      initDay(dayNum, dayData.routine.length, dayData.spot.length);
+      // No video for this day — auto-mark watched so it doesn't block completion
+      if (!dayData.videoUrl) {
+        setTimeout(() => markVideoWatched(dayNum), 100);
+      }
+    }
   }, [dayNum]);
 
   const dayState = progress[dayNum];
@@ -53,23 +96,20 @@ export default function DayWorkspace() {
 
   const handleComplete = async () => {
     if (!complete) return;
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await markCelebrated(dayNum);
+    // Show modal + confetti immediately — don't block on API call
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    markCelebrated(dayNum);       // fire-and-forget (syncs to backend in background)
+    sendCompletionNotification(dayNum).catch(() => {}); // schedule "reinforcement" push
     setShowModal(true);
-    // Fire confetti after modal mounts
-    setTimeout(() => confettiRef.current?.start(), 100);
+    setTimeout(() => confettiRef.current?.start(), 50);
 
-    // Upsell logic — only for free users
     if (userTier === 'free') {
       if (dayNum === 1) {
-        // After Day 1: direct upsell for all
-        setTimeout(() => setUpsellType('basic'), 2500);
+        setTimeout(() => setUpsellType('basic'), 3500);
       } else if (dayNum === 3 && (accountabilityStyle === 'community' || accountabilityStyle === 'accountability_partner')) {
-        // After Day 3: community upsell for social accountability types
-        setTimeout(() => setUpsellType('cohort'), 2500);
+        setTimeout(() => setUpsellType('cohort'), 3500);
       } else if (dayNum === 7 && (accountabilityStyle === 'flexible' || accountabilityStyle === 'self_directed')) {
-        // After Day 7: flexible/VIP upsell for self-directed types
-        setTimeout(() => setUpsellType('vip'), 2500);
+        setTimeout(() => setUpsellType('vip'), 3500);
       }
     }
   };
@@ -81,33 +121,64 @@ export default function DayWorkspace() {
     setStealerInput('');
   };
 
+  // Day 15 wizard completion — save values + auto-check all spot tasks
+  const handleValuesComplete = async (values: string[]) => {
+    setWizardVisible(false);
+    await setCoreValues(values);
+    if (dayState) {
+      for (let i = 0; i < dayData.spot.length; i++) {
+        if (!dayState.spotTasks[i]) {
+          toggleSpotTask(15, i);
+        }
+      }
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   return (
     <>
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        keyboardShouldPersistTaps="handled"
+        extraScrollHeight={24}
       >
+        {/* Back */}
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back to Dashboard</Text>
+          <ChevronLeft size={18} color={Colors.tideMid} strokeWidth={2} />
+          <Text style={styles.backText}>Dashboard</Text>
         </TouchableOpacity>
 
-        <Text style={styles.phaseLabel}>{dayData.phase}</Text>
+        {/* Phase + Title */}
+        <View style={styles.phaseRow}>
+          <View style={styles.phaseDot} />
+          <Text style={styles.phaseLabel}>{dayData.phase}</Text>
+        </View>
         <Text style={styles.headline}>Day {dayNum}: {dayData.title}</Text>
-        <Text style={styles.science}>{dayData.science}</Text>
 
-        <Card style={styles.videoCard}>
+        {/* Science — "Why this works" card */}
+        <View style={styles.scienceCard}>
+          <Text style={styles.scienceLabel}>Why this works</Text>
+          <Text style={styles.scienceText}>{dayData.science}</Text>
+        </View>
+
+        {/* Video */}
+        <View style={styles.videoCard}>
           <VideoPlayer
             uri={dayData.videoUrl}
             dayNum={dayNum}
             watched={dayState.videoWatched}
             onMarkWatched={() => markVideoWatched(dayNum)}
           />
-        </Card>
+        </View>
 
         {/* Daily Routine */}
-        <Text style={styles.sectionHeader}>Daily Routine (Compounding)</Text>
-        <Card>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabel}>Daily routine</Text>
+        </View>
+        <Card style={styles.checklistCard}>
           {hardStopActive ? (
             <Text style={styles.hardStopNote}>Hard Stop Active — rest is your practice today.</Text>
           ) : (
@@ -125,8 +196,33 @@ export default function DayWorkspace() {
         {/* Spot Challenge */}
         {dayData.spot.length > 0 && (
           <>
-            <Text style={styles.sectionHeader}>Today's Spot Challenge (One-Time)</Text>
-            <Card>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>Spot challenge</Text>
+              <View style={styles.oneTimeBadge}>
+                <Text style={styles.oneTimeBadgeText}>One-time</Text>
+              </View>
+            </View>
+            {/* Day 15 — Values Wizard launch button */}
+            {dayNum === 15 && !hardStopActive && (
+              <TouchableOpacity
+                onPress={() => setWizardVisible(true)}
+                activeOpacity={0.85}
+                style={styles.wizardBtn}
+              >
+                <LinearGradient
+                  colors={coreValues.length > 0 ? [Colors.success, Colors.success] : Colors.gradients.cta}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={styles.wizardBtnInner}
+                >
+                  <Compass size={16} color={Colors.white} strokeWidth={2} />
+                  <Text style={styles.wizardBtnText}>
+                    {coreValues.length > 0 ? 'My Core Values ✓' : 'Start Values Discovery →'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            <Card style={styles.checklistCard}>
               {hardStopActive ? (
                 <Text style={styles.hardStopNote}>Hard Stop Active — rest first.</Text>
               ) : (
@@ -136,6 +232,7 @@ export default function DayWorkspace() {
                     label={task}
                     checked={dayState.spotTasks[i] ?? false}
                     onToggle={() => toggleSpotTask(dayNum, i)}
+                    type="spot"
                   />
                 ))
               )}
@@ -143,65 +240,110 @@ export default function DayWorkspace() {
           </>
         )}
 
-        {/* Attention Stealer log */}
-        <Text style={styles.sectionHeader}>Log an Attention Stealer</Text>
-        <View style={styles.stealerRow}>
-          <TextInput
-            style={styles.stealerInput}
-            placeholder="What distracted you?"
-            placeholderTextColor={Colors.mutedTeal}
-            value={stealerInput}
-            onChangeText={setStealerInput}
-            returnKeyType="done"
-            onSubmitEditing={handleLogStealer}
-          />
-          <TouchableOpacity style={styles.stealerBtn} onPress={handleLogStealer}>
-            <Text style={styles.stealerBtnText}>Log</Text>
-          </TouchableOpacity>
+        {/* Attention Stealer */}
+        <View style={styles.stealerCard}>
+          <Text style={styles.stealerCardLabel}>Did something steal your focus?</Text>
+          <View style={styles.stealerRow}>
+            <TextInput
+              style={[styles.stealerInput, stealerFocused && styles.stealerInputFocused]}
+              placeholder="Name it..."
+              placeholderTextColor={Colors.inkFaint}
+              value={stealerInput}
+              onChangeText={setStealerInput}
+              returnKeyType="done"
+              onSubmitEditing={handleLogStealer}
+              onFocus={() => setStealerFocused(true)}
+              onBlur={() => setStealerFocused(false)}
+            />
+            <TouchableOpacity style={styles.stealerBtn} onPress={handleLogStealer}>
+              <Text style={styles.stealerBtnText}>Log</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.stealerHint}>Awareness is the first step to control.</Text>
+
+          {stealers.length > 0 && (
+            <View style={styles.stealerBars}>
+              {stealers.map((s, i) => (
+                <View key={s.label} style={styles.stealerBarRow}>
+                  <Text style={styles.stealerBarRank}>#{i + 1}</Text>
+                  <Text style={styles.stealerBarLabel} numberOfLines={1}>{s.label}</Text>
+                  <View style={styles.stealerBarTrack}>
+                    <View style={[styles.stealerBarFill, { width: `${(s.count / stealers[0].count) * 100}%` }]} />
+                  </View>
+                  <Text style={styles.stealerBarCount}>{s.count}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Victory Journal */}
-        <Text style={styles.sectionHeader}>Victory Journal</Text>
-        <Card>
+        <Card style={styles.journalCard}>
+          <View style={styles.journalHeader}>
+            <View style={styles.journalHeaderLeft}>
+              <BookOpen size={16} color={Colors.tide} strokeWidth={2} />
+              <Text style={styles.journalTitle}>Victory Journal</Text>
+            </View>
+            <View style={styles.privateBadge}>
+              <Text style={styles.privateBadgeText}>🔒 Encrypted</Text>
+            </View>
+          </View>
+
           <TextInput
-            style={styles.journalInput}
+            style={[styles.journalInput, journalFocused && styles.journalInputFocused]}
             multiline
-            placeholder="Write your win, reflection, or insight for today..."
-            placeholderTextColor={Colors.mutedTeal}
+            placeholder={journalPlaceholder}
+            placeholderTextColor={Colors.inkFaint}
             value={dayState.journal}
             onChangeText={(t) => setJournal(dayNum, t)}
             onBlur={() => saveJournal(dayNum)}
+            onFocus={() => setJournalFocused(true)}
             textAlignVertical="top"
           />
+
           <TouchableOpacity
             style={styles.victoryLogBtn}
             onPress={() => {
               if (dayState.journal.trim()) {
                 useToolStore.getState().addVictory({ mood: 'Reflection', text: dayState.journal, date: new Date().toISOString() });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Logged!', 'Added to your Victory Board.');
               }
             }}
           >
+            <Star size={14} color={Colors.tide} strokeWidth={2} />
             <Text style={styles.victoryLogBtnText}>Log to Victory Board</Text>
           </TouchableOpacity>
         </Card>
 
-        {/* Completion */}
-        <TouchableOpacity
-          style={[styles.completeBtn, !complete && styles.completeBtnDisabled]}
-          onPress={handleComplete}
-          disabled={!complete}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.completeBtnText}>
-            {complete ? "Yes! I completed today's challenge 🏅" : "Complete all tasks to finish"}
-          </Text>
-        </TouchableOpacity>
+        {/* Complete Button */}
+        {complete ? (
+          <MotiView
+            from={{ opacity: 0, translateY: 16 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'spring', damping: 20, delay: 200 }}
+          >
+            <TouchableOpacity onPress={handleComplete} activeOpacity={0.85}>
+              <LinearGradient
+                colors={Colors.gradients.cta}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.completeBtn}
+              >
+                <Text style={styles.completeBtnText}>I completed Day {dayNum}</Text>
+                <Award size={18} color={Colors.white} strokeWidth={2} />
+              </LinearGradient>
+            </TouchableOpacity>
+          </MotiView>
+        ) : (
+          <View style={styles.completeBtnLocked}>
+            <Lock size={14} color={Colors.inkFaint} strokeWidth={2} />
+            <Text style={styles.completeBtnLockedText}>Complete all tasks to finish</Text>
+          </View>
+        )}
 
-        <View style={{ height: 60 }} />
-      </ScrollView>
+        <View style={{ height: 80 }} />
+      </KeyboardAwareScrollView>
 
-      {/* Upsell Modal — shown after confetti completes */}
       {upsellType && (
         <UpsellModal
           visible={!!upsellType}
@@ -210,15 +352,26 @@ export default function DayWorkspace() {
         />
       )}
 
+      {/* Paywall — free user on Day 6+ */}
+      <UpsellModal
+        visible={paywallVisible}
+        upsellType="basic"
+        onDismiss={() => {
+          setPaywallVisible(false);
+          router.back();
+        }}
+      />
+
+      {/* Day 15 — Core Values Wizard */}
+      <CoreValuesWizard
+        visible={wizardVisible}
+        onComplete={handleValuesComplete}
+        onClose={() => setWizardVisible(false)}
+      />
+
       {/* Day Complete Modal */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowModal(false)}
-      >
+      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
         <View style={styles.modalOverlay}>
-          {/* Confetti fires from center-top */}
           <ConfettiCannon
             ref={confettiRef}
             count={180}
@@ -226,26 +379,38 @@ export default function DayWorkspace() {
             autoStart={false}
             fadeOut
             fallSpeed={3000}
-            colors={[Colors.primaryBlue, Colors.amber, Colors.successGreen, Colors.white, '#F9A8D4']}
+            colors={[Colors.tide, Colors.tideMid, Colors.tideDeep, Colors.gold, Colors.white]}
           />
 
-          <View style={styles.modalCard}>
-            <Text style={styles.modalEmoji}>🏅</Text>
-            <Text style={styles.modalTitle}>Day {dayNum} Complete!</Text>
-            <Text style={styles.modalSubtitle}>{dayData.title}</Text>
+          <MotiView
+            from={{ opacity: 0, scale: 0.92, translateY: 24 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            transition={{ type: 'spring', damping: 20 }}
+            style={styles.modalCard}
+          >
+            <LinearGradient
+              colors={Colors.gradients.ctaGold}
+              start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+              style={styles.modalMedalWrap}
+            >
+              <Award size={34} color={Colors.white} strokeWidth={1.5} />
+            </LinearGradient>
+            <Text style={styles.modalTitle}>Day {dayNum} done.</Text>
             <Text style={styles.modalBody}>
-              You showed up today. That's the real win. Every day you complete compounds into the unstuck life you're building.
+              You showed up. That's the compound effect in motion.
             </Text>
 
             {dayNum < 21 && (
-              <Text style={styles.modalNext}>
-                Day {dayNum + 1} unlocked 🔓
-              </Text>
+              <View style={styles.unlockBadge}>
+                <Unlock size={14} color={Colors.success} strokeWidth={2} />
+                <Text style={styles.unlockText}>Day {dayNum + 1} unlocked</Text>
+              </View>
             )}
 
             <TouchableOpacity
               style={styles.modalBtn}
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowModal(false);
                 router.replace('/(app)/');
               }}
@@ -258,6 +423,7 @@ export default function DayWorkspace() {
               <TouchableOpacity
                 style={styles.modalBtnOutline}
                 onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowModal(false);
                   router.replace(`/(app)/day/${dayNum + 1}` as any);
                 }}
@@ -266,7 +432,7 @@ export default function DayWorkspace() {
                 <Text style={styles.modalBtnOutlineText}>Start Day {dayNum + 1} →</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </MotiView>
         </View>
       </Modal>
     </>
@@ -274,124 +440,224 @@ export default function DayWorkspace() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.lightBlue },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: 60, gap: Spacing.md },
-  backBtn: { marginBottom: Spacing.sm },
-  backText: { color: Colors.primaryBlue, fontSize: FontSizes.base, fontFamily: Fonts.bodyMedium },
-  phaseLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.bodyBold, color: Colors.primaryBlue, textTransform: 'uppercase', letterSpacing: 1 },
-  headline: { fontSize: FontSizes['3xl'], fontFamily: Fonts.display, color: Colors.darkNavy, lineHeight: 44 },
-  science: { fontSize: FontSizes.base, fontFamily: Fonts.body, color: Colors.mutedTeal, lineHeight: 26 },
-  videoCard: { gap: Spacing.sm },
-  sectionHeader: { fontSize: FontSizes.base, fontFamily: Fonts.bodyBold, color: Colors.darkNavy, textTransform: 'uppercase', letterSpacing: 0.5 },
-  hardStopNote: { color: Colors.mutedTeal, fontSize: FontSizes.sm, fontStyle: 'italic', textAlign: 'center', padding: Spacing.sm },
-  stealerRow: { flexDirection: 'row', gap: Spacing.sm },
-  stealerInput: {
-    flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.amber,
-    borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md,
-    color: Colors.darkNavy,
-    backgroundColor: Colors.white,
+  container: { flex: 1, backgroundColor: Colors.sand },
+  content:   { paddingHorizontal: Spacing.lg, paddingTop: 60, gap: Spacing.md },
+
+  // Back
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xs },
+  backText: { color: Colors.tideMid, fontSize: FontSizes.sm, fontFamily: Fonts.bodyMedium },
+
+  // Header
+  phaseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  phaseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.tide, marginBottom: 1 },
+  phaseLabel: {
+    fontSize: FontSizes.xs, fontFamily: Fonts.mono,
+    color: Colors.tide, letterSpacing: 2, textTransform: 'uppercase',
   },
-  stealerBtn: {
-    backgroundColor: Colors.amber,
+  headline: {
+    fontSize: FontSizes['3xl'], fontFamily: Fonts.display,
+    color: Colors.ink, lineHeight: 42,
+  },
+
+  // Science card
+  scienceCard: {
+    backgroundColor: Colors.white,
     borderRadius: Radius.button,
-    height: 44,
-    paddingHorizontal: Spacing.md,
+    padding: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.tide,
+  },
+  scienceLabel: {
+    fontSize: FontSizes.xs, fontFamily: Fonts.bodyBold,
+    color: Colors.tide, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6,
+  },
+  scienceText: {
+    fontSize: FontSizes.sm, fontFamily: Fonts.displayLightItalic,
+    color: Colors.inkMuted, lineHeight: 24,
+  },
+
+  // Video
+  videoCard: {
+    backgroundColor: Colors.darkBase,
+    borderRadius: Radius.card,
+    overflow: 'hidden',
+  },
+
+  // Section headers
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: -4 },
+  sectionLabel: {
+    fontSize: FontSizes.base, fontFamily: Fonts.display,
+    fontStyle: 'italic', color: Colors.inkMuted,
+  },
+  oneTimeBadge: {
+    backgroundColor: Colors.goldLight, borderRadius: Radius.tag,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: Colors.goldBorder,
+  },
+  oneTimeBadgeText: { fontSize: FontSizes.xs, fontFamily: Fonts.bodyBold, color: Colors.gold },
+  checklistCard: { gap: Spacing.xs },   // 4px between each ChecklistItem row
+  hardStopNote: {
+    color: Colors.inkMuted, fontSize: FontSizes.sm,
+    fontStyle: 'italic', textAlign: 'center', padding: Spacing.sm,
+  },
+  wizardBtn: {
+    marginBottom: Spacing.sm,
+    borderRadius: Radius.tag,
+    overflow: 'hidden',
+  },
+  wizardBtnInner: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: Radius.tag,
   },
-  stealerBtnText: { color: Colors.white, fontWeight: '600' },
+  wizardBtnText: {
+    fontFamily: Fonts.bodyBold,
+    fontSize: FontSizes.base,
+    color: Colors.white,
+  },
+
+  // Attention stealer
+  stealerCard: {
+    backgroundColor: Colors.goldLight,
+    borderRadius: Radius.card,
+    padding: Spacing.md,
+    borderWidth: 1, borderColor: Colors.goldBorder,
+    gap: 8,
+  },
+  stealerCardLabel: {
+    fontSize: FontSizes.xs, fontFamily: Fonts.bodyBold,
+    color: Colors.gold, textTransform: 'uppercase', letterSpacing: 0.8,
+  },
+  stealerRow: { flexDirection: 'row', gap: Spacing.sm },
+  stealerInput: {
+    flex: 1, height: 44,
+    borderWidth: 1.5, borderColor: Colors.goldBorder,
+    borderRadius: Radius.input,
+    paddingHorizontal: Spacing.md,
+    color: Colors.ink, backgroundColor: Colors.white,
+    fontSize: FontSizes.base,
+  },
+  stealerInputFocused: { borderColor: Colors.gold },
+  stealerBtn: {
+    backgroundColor: Colors.gold, borderRadius: Radius.input,
+    height: 44, paddingHorizontal: Spacing.md,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stealerBtnText: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: FontSizes.sm },
+  stealerHint: { fontSize: FontSizes.xs, color: Colors.inkFaint, fontStyle: 'italic' },
+  stealerBars: { gap: 6, marginTop: 4 },
+  stealerBarRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stealerBarRank: { width: 20, fontSize: FontSizes.xs, fontFamily: Fonts.mono, color: Colors.gold },
+  stealerBarLabel: { width: 90, fontSize: FontSizes.xs, fontFamily: Fonts.body, color: Colors.inkMuted },
+  stealerBarTrack: { flex: 1, height: 6, backgroundColor: Colors.goldBorder, borderRadius: 3, overflow: 'hidden' },
+  stealerBarFill: { height: 6, backgroundColor: Colors.gold, borderRadius: 3 },
+  stealerBarCount: { fontSize: FontSizes.xs, fontFamily: Fonts.mono, color: Colors.inkMuted, width: 18, textAlign: 'right' },
+
+  // Journal
+  journalCard: { gap: Spacing.sm },
+  journalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  journalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  journalTitle: { fontSize: FontSizes.lg, fontFamily: Fonts.display, color: Colors.ink },
+  privateBadge: {},
+  privateBadgeText: { fontSize: FontSizes.xs, fontFamily: Fonts.body, color: Colors.inkFaint },
   journalInput: {
     minHeight: 120,
     fontSize: FontSizes.base,
-    color: Colors.darkNavy,
-    lineHeight: 24,
+    fontFamily: Fonts.displayItalic,
+    color: Colors.ink,
+    lineHeight: 28,
+    paddingVertical: Spacing.sm,
   },
+  journalInputFocused: { minHeight: 160 },
   victoryLogBtn: {
-    marginTop: Spacing.sm,
-    backgroundColor: Colors.successGreen,
-    borderRadius: Radius.tag,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: Colors.tideLight,
+    borderRadius: Radius.button,
+    height: 42,
   },
-  victoryLogBtnText: { color: Colors.white, fontWeight: '600' },
+  victoryLogBtnText: { color: Colors.tide, fontFamily: Fonts.bodyBold, fontSize: FontSizes.sm },
+
+  // Complete button
   completeBtn: {
-    backgroundColor: Colors.primaryBlue,
     borderRadius: Radius.tag,
-    height: 56,
+    height: 58,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
     ...Shadows.cta,
   },
-  completeBtnDisabled: { backgroundColor: Colors.mutedTeal, opacity: 0.5 },
-  completeBtnText: { color: Colors.white, fontSize: FontSizes.base, fontWeight: '600', textAlign: 'center', paddingHorizontal: 16 },
+  completeBtnText: { color: Colors.white, fontSize: FontSizes.base, fontFamily: Fonts.bodyBold },
+  completeBtnLocked: {
+    backgroundColor: Colors.sandDeep,
+    borderRadius: Radius.tag,
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  completeBtnLockedText: { color: Colors.inkFaint, fontSize: FontSizes.base, fontFamily: Fonts.body },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(7,26,52,0.85)',
+    backgroundColor: 'rgba(10,20,30,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
   modalCard: {
     backgroundColor: Colors.white,
-    borderRadius: 28,
+    borderRadius: 32,
     padding: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     width: '100%',
     alignItems: 'center',
     gap: Spacing.sm,
-    ...Shadows.card,
+    ...Shadows.modal,
   },
-  modalEmoji: { fontSize: 64, marginBottom: 4 },
-  modalTitle: {
-    fontSize: FontSizes['3xl'],
-    fontFamily: Fonts.display,
-    color: Colors.darkNavy,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: FontSizes.lg,
-    fontFamily: Fonts.bodyMedium,
-    color: Colors.primaryBlue,
-    textAlign: 'center',
-  },
-  modalBody: {
-    fontSize: FontSizes.base,
-    fontFamily: Fonts.body,
-    color: Colors.mutedTeal,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginVertical: Spacing.sm,
-  },
-  modalNext: {
-    fontSize: FontSizes.base,
-    fontFamily: Fonts.bodyBold,
-    color: Colors.successGreen,
-    marginBottom: Spacing.sm,
-  },
-  modalBtn: {
-    backgroundColor: Colors.primaryBlue,
-    borderRadius: Radius.button,
-    height: 52,
-    width: '100%',
+  modalMedalWrap: {
+    width: 72, height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: Colors.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: FontSizes['3xl'], fontFamily: Fonts.display,
+    color: Colors.ink, textAlign: 'center',
+  },
+  modalBody: {
+    fontSize: FontSizes.base, fontFamily: Fonts.body,
+    color: Colors.inkMuted, textAlign: 'center', lineHeight: 24,
+    marginVertical: Spacing.sm,
+  },
+  unlockBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.successLight, borderRadius: Radius.tag,
+    paddingHorizontal: 16, paddingVertical: 8,
+    alignSelf: 'center', marginBottom: Spacing.sm,
+  },
+  unlockText: { fontSize: FontSizes.sm, fontFamily: Fonts.bodyBold, color: Colors.success },
+  modalBtn: {
+    backgroundColor: Colors.tide, borderRadius: Radius.button,
+    height: 52, width: '100%', alignItems: 'center', justifyContent: 'center',
     marginTop: Spacing.sm,
   },
   modalBtnText: { color: Colors.white, fontSize: FontSizes.base, fontFamily: Fonts.bodyBold },
   modalBtnOutline: {
-    borderWidth: 2,
-    borderColor: Colors.primaryBlue,
-    borderRadius: Radius.button,
-    height: 52,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1.5, borderColor: Colors.tide, borderRadius: Radius.button,
+    height: 52, width: '100%', alignItems: 'center', justifyContent: 'center',
   },
-  modalBtnOutlineText: { color: Colors.primaryBlue, fontSize: FontSizes.base, fontFamily: Fonts.bodyBold },
+  modalBtnOutlineText: { color: Colors.tide, fontSize: FontSizes.base, fontFamily: Fonts.bodyBold },
 });

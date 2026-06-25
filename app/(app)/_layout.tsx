@@ -1,57 +1,134 @@
-import { Text } from 'react-native';
-import { Tabs } from 'expo-router';
+import { View, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
+import { Tabs, useRouter, useSegments } from 'expo-router';
+import { Home, Map, User, Zap } from '../../lib/icons';
+import { MotiView } from 'moti';
 import { Colors } from '../../constants/colors';
 import { Fonts } from '../../constants/typography';
+import { Shadows } from '../../constants/spacing';
 import { useToolStore } from '../../store/useToolStore';
 
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
+const { width: W } = Dimensions.get('window');
+const FAB_SIZE   = 52;
+const FAB_RIGHT  = 20;
+const FAB_BOTTOM = Platform.OS === 'ios' ? 96 : 76;
+
+const TAB_HEIGHT  = Platform.OS === 'ios' ? 88 : 64;
+const TAB_PAD_BOT = Platform.OS === 'ios' ? 28 : 10;
+const TAB_PAD_TOP = 8;
+
+// Every screen that should NEVER appear as a tab.
+// Expo Router registers every file in (app)/ — we must suppress each one explicitly.
+const HIDDEN: string[] = [
+  'tools',
+  'tools/index',
+  'tools/breathing',
+  'tools/pomodoro',
+  'tools/release',
+  'tools/batching',
+  'tools/havening',
+  'day',
+  'day/[id]',
+  'victories',
+];
+
+function TabIcon({ Icon, focused }: { Icon: React.ComponentType<any>; focused: boolean }) {
+  return <Icon size={22} color={focused ? Colors.tide : Colors.stone} />;
+}
+
+function ToolsFAB() {
+  const router = useRouter();
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>
+    <TouchableOpacity style={styles.fab} onPress={() => router.push('/(app)/tools' as any)} activeOpacity={0.82}>
+      <MotiView
+        from={{ scale: 1, opacity: 0.45 }}
+        animate={{ scale: 1.7, opacity: 0 }}
+        transition={{ type: 'timing', duration: 1600, loop: true }}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      >
+        <View style={styles.fabPulseRing} />
+      </MotiView>
+      <Zap size={20} color={Colors.white} />
+    </TouchableOpacity>
   );
 }
+
+// Routes where the bottom bar + FAB must be hidden (full-screen experiences)
+const FULLSCREEN_ROUTES = ['tools', 'day', 'victories'];
 
 export default function AppLayout() {
   const zenMode = useToolStore((s) => s.zenMode);
+  const segments = useSegments();
+
+  // Hide bar when on any tool/day/victories route OR when zenMode is on
+  const isFullscreen = zenMode || segments.some((seg) => FULLSCREEN_ROUTES.includes(seg));
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: zenMode
-          ? { display: 'none' }
-          : {
-              backgroundColor: Colors.white,
-              borderTopColor: Colors.lightBlue,
-              borderTopWidth: 1,
-              height: 64,
-              paddingBottom: 8,
-            },
-        tabBarActiveTintColor: Colors.primaryBlue,
-        tabBarInactiveTintColor: Colors.mutedTeal,
-        tabBarLabelStyle: { fontSize: 11, fontFamily: Fonts.bodyMedium },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+    <View style={styles.root}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: isFullscreen
+            ? { display: 'none' }
+            : {
+                backgroundColor: Colors.white,
+                borderTopColor: Colors.sandBorder,
+                borderTopWidth: 1,
+                height: TAB_HEIGHT,
+                paddingBottom: TAB_PAD_BOT,
+                paddingTop: TAB_PAD_TOP,
+                elevation: 0,
+                shadowOpacity: 0,
+              },
+          tabBarActiveTintColor:   Colors.tide,
+          tabBarInactiveTintColor: Colors.stone,
+          tabBarLabelStyle: { fontSize: 10, fontFamily: Fonts.bodyMedium },
         }}
-      />
-      <Tabs.Screen
-        name="journey"
-        options={{
-          title: 'Journey',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📅" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="👤" focused={focused} />,
-        }}
-      />
-    </Tabs>
+      >
+        {/* ── Visible tabs ── */}
+        <Tabs.Screen
+          name="index"
+          options={{ title: 'Today', tabBarIcon: ({ focused }) => <TabIcon Icon={Home} focused={focused} /> }}
+        />
+        <Tabs.Screen
+          name="journey"
+          options={{ title: 'Journey', tabBarIcon: ({ focused }) => <TabIcon Icon={Map} focused={focused} /> }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{ title: 'You', tabBarIcon: ({ focused }) => <TabIcon Icon={User} focused={focused} /> }}
+        />
+
+        {/* ── Hidden screens — suppress every sub-route individually ── */}
+        {HIDDEN.map((name) => (
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+        ))}
+      </Tabs>
+
+      {!isFullscreen && <ToolsFAB />}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+
+  fab: {
+    position: 'absolute',
+    bottom: FAB_BOTTOM,
+    right: FAB_RIGHT,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
+    backgroundColor: Colors.tide,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+    ...Shadows.fab,
+  },
+  fabPulseRing: {
+    flex: 1,
+    borderRadius: FAB_SIZE / 2,
+    backgroundColor: Colors.tide,
+  },
+});

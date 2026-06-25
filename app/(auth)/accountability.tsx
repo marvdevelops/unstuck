@@ -8,12 +8,14 @@ import { FontSizes } from '../../constants/typography';
 import { Spacing, Radius } from '../../constants/spacing';
 import { useUserStore, AccountabilityStyle } from '../../store/useUserStore';
 import ProgressDots from '../../components/ui/ProgressDots';
+import { Check, User, Users, Target, Zap } from '../../lib/icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const OPTIONS: { emoji: string; title: string; sub: string; value: AccountabilityStyle }[] = [
-  { emoji: '🦅', title: "On my own.", sub: "I'm self-motivated. I just need the right system.", value: 'solo' },
-  { emoji: '👥', title: "With a community around me.", sub: "Knowing others are doing it with me keeps me going.", value: 'community' },
-  { emoji: '🎯', title: "With direct accountability.", sub: "I need someone checking in. I work best under structure.", value: 'direct' },
-  { emoji: '⚡', title: "It depends on where I am.", sub: "Some seasons I'm solo. Others I need support.", value: 'flexible' },
+const OPTIONS: { Icon: React.ComponentType<any>; title: string; sub: string; value: AccountabilityStyle }[] = [
+  { Icon: User,   title: "On my own.", sub: "I'm self-motivated. I just need the right system.", value: 'solo' },
+  { Icon: Users,  title: "With a community around me.", sub: "Knowing others are doing it with me keeps me going.", value: 'community' },
+  { Icon: Target, title: "With direct accountability.", sub: "I need someone checking in. I work best under structure.", value: 'direct' },
+  { Icon: Zap,    title: "It depends on where I am.", sub: "Some seasons I'm solo. Others I need support.", value: 'flexible' },
 ];
 
 export default function Accountability() {
@@ -36,19 +38,35 @@ export default function Accountability() {
         {OPTIONS.map((opt) => {
           const isSelected = selected === opt.value;
           const isDimmed = selected !== null && !isSelected;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              style={[styles.card, isSelected && styles.cardSelected, isDimmed && styles.cardDimmed]}
-              onPress={() => handleSelect(opt.value)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emoji}>{opt.emoji}</Text>
+          const cardContent = (
+            <>
+              <View style={styles.iconWrap}>
+                <opt.Icon size={20} color={isSelected ? Colors.tideMid : Colors.white75} />
+              </View>
               <View style={styles.cardText}>
                 <Text style={[styles.cardTitle, isSelected && styles.cardTitleSelected]}>{opt.title}</Text>
                 <Text style={styles.cardSub}>{opt.sub}</Text>
               </View>
-              {isSelected && <Text style={styles.check}>✓</Text>}
+              {isSelected && <Check size={16} color={Colors.tideMid} />}
+            </>
+          );
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={isDimmed && styles.cardDimmed}
+              onPress={() => handleSelect(opt.value)}
+              activeOpacity={0.8}
+            >
+              {isSelected ? (
+                <LinearGradient
+                  colors={['rgba(46,110,128,0.32)', 'rgba(46,110,128,0.14)']}
+                  style={[styles.card, styles.cardSelected]}
+                >
+                  {cardContent}
+                </LinearGradient>
+              ) : (
+                <View style={styles.card}>{cardContent}</View>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -86,14 +104,13 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.sm,
   },
-  cardSelected: { borderColor: Colors.primaryBlue, borderLeftWidth: 4 },
+  cardSelected: { borderColor: Colors.tide + 'AA', borderWidth: 1.5 },
   cardDimmed: { opacity: 0.6 },
-  emoji: { fontSize: 24, width: 32, textAlign: 'center' },
+  iconWrap: { width: 32, alignItems: 'center' },
   cardText: { flex: 1 },
   cardTitle: { color: Colors.white, fontSize: FontSizes.base, fontWeight: '600' },
-  cardTitleSelected: { color: Colors.primaryBlue },
+  cardTitleSelected: { color: Colors.tideMid },
   cardSub: { color: Colors.white75, fontSize: FontSizes.xs, marginTop: 2 },
-  check: { color: Colors.primaryBlue, fontSize: FontSizes.base, fontWeight: '700' },
   ctaWrapper: { marginTop: Spacing.lg },
   cta: {
     backgroundColor: Colors.primaryBlue,

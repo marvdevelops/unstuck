@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useAudioStore } from '../../store/useAudioStore';
+import { Film, Check } from '../../lib/icons';
 import { Colors } from '../../constants/colors';
 import { FontSizes } from '../../constants/typography';
 import { Radius } from '../../constants/spacing';
@@ -44,8 +45,9 @@ export default function VideoPlayer({ uri, dayNum, watched, onMarkWatched }: Pro
       style={[styles.watchedBtn, watched && styles.watchedBtnActive]}
       onPress={onMarkWatched}
     >
+      {watched && <Check size={13} color={Colors.white} />}
       <Text style={[styles.watchedBtnText, watched && styles.watchedBtnTextActive]}>
-        {watched ? '✓ Watched' : 'Mark Watched'}
+        {watched ? 'Watched' : 'Mark Watched'}
       </Text>
     </TouchableOpacity>
   );
@@ -53,7 +55,7 @@ export default function VideoPlayer({ uri, dayNum, watched, onMarkWatched }: Pro
   if (!uri) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderIcon}>🎬</Text>
+        <Film size={36} color={Colors.white45} />
         <Text style={styles.placeholderText}>Day {dayNum} video not yet uploaded.</Text>
         <Text style={styles.placeholderSub}>Upload to Cloudflare R2 and add the URL to curriculum.ts</Text>
         <WatchedButton />
@@ -108,9 +110,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.mutedTeal,
     borderRadius: Radius.tag,
     height: 40,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
+    gap: 6,
   },
   watchedBtnActive: { backgroundColor: Colors.primaryBlue, borderColor: Colors.primaryBlue },
   watchedBtnText: { color: Colors.mutedTeal, fontWeight: '600', fontSize: FontSizes.sm },
@@ -124,7 +128,6 @@ const styles = StyleSheet.create({
     minHeight: 180,
     justifyContent: 'center',
   },
-  placeholderIcon: { fontSize: 36 },
   placeholderText: { color: Colors.white75, fontSize: FontSizes.base, textAlign: 'center' },
   placeholderSub: { color: Colors.white45, fontSize: FontSizes.xs, textAlign: 'center', lineHeight: 18 },
 });

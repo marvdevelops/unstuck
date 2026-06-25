@@ -10,6 +10,43 @@ export const PRODUCT_IDS = {
   alumni: 'unstuck21_alumni',  // ₱749 alumni re-entry
 };
 
+// ── Mock IAP ──────────────────────────────────────────────────────────────────
+// Set to true while App Store products aren't live yet.
+// Shows a realistic confirmation dialog and grants the tier locally (session only).
+// Flip to false once products are approved in App Store Connect.
+export const MOCK_IAP = true;
+
+const MOCK_PRICES: Record<string, string> = {
+  basic: '₱1,499', cohort: '₱7,499', vip: '₱13,999', alumni: '₱749',
+};
+
+function mockPurchaseTier(productId: string): Promise<void> {
+  const tierEntry = Object.entries(PRODUCT_IDS).find(([, id]) => id === productId);
+  const tier  = (tierEntry?.[0] ?? 'basic') as 'basic' | 'cohort' | 'vip' | 'alumni';
+  const price = MOCK_PRICES[tier] ?? '₱1,499';
+
+  return new Promise((resolve, reject) => {
+    Alert.alert(
+      'Confirm Purchase',
+      `${price} · One-time payment\n\n(Demo mode — no charge will be made.)`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => reject({ code: 'E_USER_CANCELLED' }) },
+        {
+          text: 'Buy',
+          onPress: () => {
+            const user = useAuthStore.getState().user;
+            if (user) {
+              useAuthStore.getState().updateUser({ ...user, tier });
+            }
+            Alert.alert('Purchase successful! 🎉', 'Your tier has been upgraded.');
+            resolve();
+          },
+        },
+      ],
+    );
+  });
+}
+
 // Lazy-load react-native-iap so Expo Go doesn't crash on startup
 // (react-native-iap requires a native build — not available in Expo Go)
 let iap: typeof import('react-native-iap') | null = null;
@@ -81,7 +118,18 @@ export async function loadProducts() {
   return lib.fetchProducts({ skus: Object.values(PRODUCT_IDS) });
 }
 
+export async function restorePurchases() {
+  const lib = await getIAP();
+  if (!lib) throw new Error('Purchases unavailable in Expo Go');
+  await lib.initConnection();
+  const purchases = await lib.getAvailablePurchases();
+  return purchases;
+}
+
 export async function purchaseTier(productId: string) {
+  if (MOCK_IAP) {
+    return mockPurchaseTier(productId);
+  }
   const lib = await getIAP();
   if (!lib) {
     Alert.alert('Purchases unavailable', 'Please install the full app to make purchases.');

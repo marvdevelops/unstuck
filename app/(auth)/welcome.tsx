@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-nati
 import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import { Easing } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import { Fonts, FontSizes } from '../../constants/typography';
 import { Spacing, Radius } from '../../constants/spacing';
@@ -13,14 +14,21 @@ export default function Welcome() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      {/* Breathing background sphere */}
+    <LinearGradient colors={Colors.gradients.onboardBg} style={styles.container}>
+      {/* Atmospheric sphere — top-bleed with light-source gradient */}
       <MotiView
-        from={{ scale: 1, opacity: 0.15 }}
-        animate={{ scale: 1.6, opacity: 0.25 }}
-        transition={{ type: 'timing', duration: 4000, easing: Easing.inOut(Easing.sin), loop: true, repeatReverse: true }}
+        from={{ scale: 1, opacity: 0.55 }}
+        animate={{ scale: 1.12, opacity: 0.80 }}
+        transition={{ type: 'timing', duration: 5000, easing: Easing.inOut(Easing.sin), loop: true, repeatReverse: true }}
         style={styles.sphere}
-      />
+      >
+        <LinearGradient
+          colors={['#4AAFC4', '#2E6E80', '#1C4D5C']}
+          start={{ x: 0.25, y: 0.10 }}
+          end={{ x: 0.80, y: 0.90 }}
+          style={{ flex: 1, borderRadius: 999 }}
+        />
+      </MotiView>
 
       <ProgressDots total={5} current={1} style={styles.dots} />
 
@@ -58,18 +66,23 @@ export default function Welcome() {
         transition={{ delay: 1200, duration: 500 }}
         style={styles.ctaWrapper}
       >
-        <TouchableOpacity style={styles.cta} onPress={() => router.push('/(auth)/diagnosis')} activeOpacity={0.85}>
-          <Text style={styles.ctaText}>I'm ready. Let's go. →</Text>
+        <TouchableOpacity onPress={() => router.push('/(auth)/diagnosis')} activeOpacity={0.85}>
+          <LinearGradient
+            colors={Colors.gradients.cta}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.cta}
+          >
+            <Text style={styles.ctaText}>I'm ready. Let's go. →</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </MotiView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.darkNavy,
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingTop: 60,
@@ -77,12 +90,12 @@ const styles = StyleSheet.create({
   },
   sphere: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: Colors.primaryBlue,
-    top: '25%',
+    width: width * 0.9,
+    height: width * 0.9,
+    borderRadius: width * 0.45,
+    top: -width * 0.28,
     alignSelf: 'center',
+    overflow: 'hidden',
   },
   dots: { marginBottom: Spacing.lg },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.lg },
@@ -90,10 +103,10 @@ const styles = StyleSheet.create({
   tagline: { color: Colors.white45, fontSize: FontSizes.sm, textAlign: 'center', marginTop: 4, fontFamily: Fonts.body },
   headline: {
     color: Colors.white,
-    fontSize: FontSizes['3xl'],
+    fontSize: FontSizes.hero,
     textAlign: 'center',
-    fontFamily: Fonts.display,
-    lineHeight: 40,
+    fontFamily: Fonts.displayItalic,
+    lineHeight: 54,
     marginTop: Spacing.lg,
   },
   body: {
@@ -123,14 +136,14 @@ const styles = StyleSheet.create({
   badgeText: { color: Colors.amber, fontSize: FontSizes.xs, fontFamily: Fonts.bodyMedium },
   ctaWrapper: { width: '100%' },
   cta: {
-    backgroundColor: Colors.primaryBlue,
     borderRadius: Radius.tag,
     height: 56,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primaryBlue,
+    shadowColor: Colors.tide,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
   },

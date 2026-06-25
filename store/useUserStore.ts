@@ -24,8 +24,10 @@ interface UserStore {
   onboarding: OnboardingData;
   flags: UserFlags;
   onboardingComplete: boolean;
+  coreValues: string[];
   setOnboardingField: <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => void;
   completeOnboarding: () => Promise<void>;
+  setCoreValues: (values: string[]) => Promise<void>;
   loadFromStorage: () => Promise<void>;
 }
 
@@ -40,6 +42,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
   onboarding: {},
   flags: DEFAULT_FLAGS,
   onboardingComplete: false,
+  coreValues: [],
 
   setOnboardingField: (key, value) =>
     set((s) => ({ onboarding: { ...s.onboarding, [key]: value } })),
@@ -48,6 +51,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const { onboarding } = get();
     await AsyncStorage.setItem('onboarding_data', JSON.stringify(onboarding));
     set({ onboardingComplete: true });
+  },
+
+  setCoreValues: async (values) => {
+    set({ coreValues: values });
+    await AsyncStorage.setItem('core_values', JSON.stringify(values));
   },
 
   loadFromStorage: async () => {
@@ -59,6 +67,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const tierRaw = await AsyncStorage.getItem('user_tier');
     if (tierRaw) {
       set((s) => ({ flags: { ...s.flags, tier: tierRaw as UserTier } }));
+    }
+    const cvRaw = await AsyncStorage.getItem('core_values');
+    if (cvRaw) {
+      set({ coreValues: JSON.parse(cvRaw) });
     }
   },
 }));

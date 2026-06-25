@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Unstuck 21",
-    "slug": "unstuck21",
+    "slug": "untuck21",
     "scheme": "unstuck21",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -34,8 +34,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e8eac4df-02ea-498e-a645-2d205d844d2c"
+        "projectId": "0c4b588e-d4d5-4576-8aa3-449e649c0c60"
       }
-    }
+    },
+    "owner": "unstuck21"
   }
 }
