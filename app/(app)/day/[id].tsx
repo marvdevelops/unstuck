@@ -22,7 +22,7 @@ import { Colors } from '../../../constants/colors';
 import { Fonts, FontSizes } from '../../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../../constants/spacing';
 import ChecklistItem from '../../../components/journey/ChecklistItem';
-import VideoPlayer from '../../../components/journey/VideoPlayer';
+import AudioPlayer from '../../../components/journey/AudioPlayer';
 import Card from '../../../components/ui/Card';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -164,10 +164,9 @@ export default function DayWorkspace() {
           <Text style={styles.scienceText}>{dayData.science}</Text>
         </View>
 
-        {/* Video */}
+        {/* Audio */}
         <View style={styles.videoCard}>
-          <VideoPlayer
-            uri={dayData.videoUrl}
+          <AudioPlayer
             dayNum={dayNum}
             watched={dayState.videoWatched}
             onMarkWatched={() => markVideoWatched(dayNum)}
