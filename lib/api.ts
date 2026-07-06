@@ -88,6 +88,7 @@ export interface UserProfile {
   isAlumni: boolean;
   cohortId: string | null;
   vipFlag: boolean;
+  coreValues: string[] | null;
   createdAt: string;
 }
 
@@ -125,12 +126,19 @@ export const api = {
       accountability_style?: string;
       first_name?: string;
     }) => request<UserProfile>('/api/auth/onboarding', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    saveCoreValues: (core_values: string[]) =>
+      request<UserProfile>('/api/auth/core-values', { method: 'PATCH', body: JSON.stringify({ core_values }) }),
   },
 
   progress: {
     getAll: () => request<any[]>('/api/progress'),
-    upsertDay: (day: number, payload: { video_watched?: boolean; tasks_complete?: any; celebrated?: boolean }) =>
-      request(`/api/progress/${day}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    upsertDay: (day: number, payload: {
+      video_watched?: boolean;
+      tasks_complete?: any;
+      journal?: string;
+      celebrated?: boolean;
+    }) => request(`/api/progress/${day}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   },
 
   iap: {

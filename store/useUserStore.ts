@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../lib/api';
 
 export type StuckPattern = 'restart_loop' | 'overwhelm' | 'focus' | 'direction' | 'urgency';
 export type Goal = 'morning_ownership' | 'deep_focus' | 'calm_control' | 'lasting_habit' | 'identity_alignment';
@@ -56,9 +57,15 @@ export const useUserStore = create<UserStore>((set, get) => ({
   setCoreValues: async (values) => {
     set({ coreValues: values });
     await AsyncStorage.setItem('core_values', JSON.stringify(values));
+    try {
+      await api.auth.saveCoreValues(values);
+    } catch {
+      // Offline-first — local state is source of truth; will sync on next app open
+    }
   },
 
   loadFromStorage: async () => {
+    // Seed from local cache first for instant startup
     const raw = await AsyncStorage.getItem('onboarding_data');
     if (raw) {
       const onboarding: OnboardingData = JSON.parse(raw);
@@ -71,6 +78,33 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const cvRaw = await AsyncStorage.getItem('core_values');
     if (cvRaw) {
       set({ coreValues: JSON.parse(cvRaw) });
+    }
+
+    // Then fetch authoritative data from API (handles multi-device sync)
+    try {
+      const profile = await api.auth.me();
+      set((s) => ({
+        onboarding: {
+          stuck_pattern: (profile.stuckPattern as OnboardingData['stuck_pattern']) ?? s.onboarding.stuck_pattern,
+          goal: (profile.goal as OnboardingData['goal']) ?? s.onboarding.goal,
+          accountability_style: (profile.accountabilityStyle as OnboardingData['accountability_style']) ?? s.onboarding.accountability_style,
+          first_name: profile.firstName ?? s.onboarding.first_name,
+        },
+        onboardingComplete: !!profile.firstName,
+        flags: {
+          ...s.flags,
+          tier: (profile.tier === 'free' ? 'basic' : profile.tier) as UserTier,
+          is_alumni: profile.isAlumni,
+          vip_flag: profile.vipFlag,
+        },
+        coreValues: profile.coreValues?.length ? profile.coreValues : s.coreValues,
+      }));
+      // Keep local cache in sync
+      if (profile.coreValues?.length) {
+        await AsyncStorage.setItem('core_values', JSON.stringify(profile.coreValues));
+      }
+    } catch {
+      // Not logged in yet or offline — local cache stays
     }
   },
 }));

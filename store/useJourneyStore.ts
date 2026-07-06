@@ -38,9 +38,8 @@ const makeDayState = (routineLen: number, spotLen: number): DayState => ({
   celebrated: false,
 });
 
-// Progress (non-sensitive: task booleans, video watched, celebrated) → AsyncStorage
+// Progress (non-sensitive) → AsyncStorage
 const saveProgress = async (progress: Record<number, DayState>) => {
-  // Strip out journal text before storing in AsyncStorage
   const stripped: Record<number, Omit<DayState, 'journal'>> = {};
   for (const [k, v] of Object.entries(progress)) {
     const { journal: _j, ...rest } = v;
@@ -49,25 +48,33 @@ const saveProgress = async (progress: Record<number, DayState>) => {
   await AsyncStorage.setItem('journey_progress', JSON.stringify(stripped));
 };
 
-// Journal entries (sensitive) → SecureStore
-const saveJournalSecure = async (day: number, text: string) => {
+// Journal entries → SecureStore with AsyncStorage fallback
+const saveJournalLocal = async (day: number, text: string) => {
   try {
     await SecureStore.setItemAsync(JOURNAL_KEY(day), text);
   } catch {
-    // SecureStore has 2048 byte limit per key on some platforms; fall back to AsyncStorage
     await AsyncStorage.setItem(JOURNAL_KEY(day), text);
   }
 };
 
-const loadJournalSecure = async (day: number): Promise<string> => {
+const loadJournalLocal = async (day: number): Promise<string> => {
   try {
     const val = await SecureStore.getItemAsync(JOURNAL_KEY(day));
     if (val !== null) return val;
-    // Try AsyncStorage fallback
     return (await AsyncStorage.getItem(JOURNAL_KEY(day))) ?? '';
   } catch {
     return (await AsyncStorage.getItem(JOURNAL_KEY(day))) ?? '';
   }
+};
+
+// Fire-and-forget API sync — never blocks UI
+const syncDay = (day: number, state: DayState) => {
+  api.progress.upsertDay(day, {
+    video_watched: state.videoWatched,
+    tasks_complete: { routine: state.routineTasks, spot: state.spotTasks },
+    journal: state.journal,
+    celebrated: state.celebrated,
+  }).catch(() => {});
 };
 
 export const useJourneyStore = create<JourneyStore>((set, get) => ({
@@ -81,11 +88,11 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
       set((s) => ({
         progress: { ...s.progress, [day]: makeDayState(routineLen, spotLen) },
       }));
-      // Load journal from SecureStore asynchronously
-      loadJournalSecure(day).then((journal) => {
+      // Journal may not be loaded yet if loadFromStorage ran before this day was seen
+      loadJournalLocal(day).then((journal) => {
         set((s) => {
           const existing = s.progress[day];
-          if (!existing) return s;
+          if (!existing || existing.journal) return s; // already populated by API load
           return { progress: { ...s.progress, [day]: { ...existing, journal } } };
         });
       });
@@ -100,6 +107,7 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
       routineTasks[index] = !routineTasks[index];
       const updated = { ...s.progress, [day]: { ...dayState, routineTasks } };
       saveProgress(updated);
+      syncDay(day, updated[day]);
       return { progress: updated };
     });
   },
@@ -112,6 +120,7 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
       spotTasks[index] = !spotTasks[index];
       const updated = { ...s.progress, [day]: { ...dayState, spotTasks } };
       saveProgress(updated);
+      syncDay(day, updated[day]);
       return { progress: updated };
     });
   },
@@ -122,6 +131,7 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
       if (!dayState) return s;
       const updated = { ...s.progress, [day]: { ...dayState, videoWatched: true } };
       saveProgress(updated);
+      syncDay(day, updated[day]);
       return { progress: updated };
     });
   },
@@ -137,9 +147,9 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
   saveJournal: async (day) => {
     const { progress } = get();
     const dayState = progress[day];
-    if (dayState) {
-      await saveJournalSecure(day, dayState.journal);
-    }
+    if (!dayState) return;
+    await saveJournalLocal(day, dayState.journal);
+    syncDay(day, dayState);
   },
 
   markCelebrated: async (day) => {
@@ -150,23 +160,9 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
       saveProgress(updated);
       return { progress: updated };
     });
-    // Sync completion to backend (best-effort, don't block UI)
-    try {
-      const { progress } = get();
-      const dayState = progress[day];
-      if (dayState) {
-        await api.progress.upsertDay(day, {
-          video_watched: dayState.videoWatched,
-          tasks_complete: {
-            routine: dayState.routineTasks,
-            spot: dayState.spotTasks,
-          },
-          celebrated: true,
-        });
-      }
-    } catch {
-      // Offline-first — local state is source of truth
-    }
+    const { progress } = get();
+    const dayState = progress[day];
+    if (dayState) syncDay(day, { ...dayState, celebrated: true });
   },
 
   toggleHardStop: async () => {
@@ -178,10 +174,10 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
   },
 
   loadFromStorage: async () => {
+    // Local cache first for instant startup
     const raw = await AsyncStorage.getItem('journey_progress');
     if (raw) {
       const stripped = JSON.parse(raw) as Record<number, Omit<DayState, 'journal'>>;
-      // Reconstruct with empty journals; initDay will hydrate them on demand
       const progress: Record<number, DayState> = {};
       for (const [k, v] of Object.entries(stripped)) {
         progress[Number(k)] = { ...v, journal: '' };
@@ -190,6 +186,35 @@ export const useJourneyStore = create<JourneyStore>((set, get) => ({
     }
     const hs = await AsyncStorage.getItem('hard_stop_active');
     if (hs) set({ hardStopActive: JSON.parse(hs) });
+
+    // Fetch from API — authoritative source, includes journals
+    try {
+      const rows = await api.progress.getAll();
+      if (!rows?.length) return;
+      set((s) => {
+        const merged = { ...s.progress };
+        for (const row of rows) {
+          const day = row.dayNumber as number;
+          const tc = (row.tasksComplete as any) ?? {};
+          const existing = merged[day];
+          merged[day] = {
+            videoWatched: row.videoWatched ?? existing?.videoWatched ?? false,
+            routineTasks: tc.routine ?? existing?.routineTasks ?? [],
+            spotTasks: tc.spot ?? existing?.spotTasks ?? [],
+            journal: row.journal ?? existing?.journal ?? '',
+            celebrated: row.celebrated ?? existing?.celebrated ?? false,
+          };
+          // Keep local journal cache in sync
+          if (row.journal) saveJournalLocal(day, row.journal);
+        }
+        return { progress: merged };
+      });
+      // Update AsyncStorage cache from API data
+      const updatedProgress = get().progress;
+      saveProgress(updatedProgress);
+    } catch {
+      // Offline or not logged in — local state stays
+    }
   },
 
   isDayComplete: (day) => {
