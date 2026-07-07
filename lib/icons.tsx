@@ -50,6 +50,7 @@ export const ChevronDown  = feather('chevron-down');
 
 // ── Actions ────────────────────────────────────────────────────────────────
 export const Play         = feather('play');
+export const Pause        = feather('pause');
 export const X            = feather('x');
 export const Check        = feather('check');
 export const CheckCircle  = feather('check-circle');
@@ -88,3 +89,4 @@ export const Compass      = feather('compass');
 export const Crosshair    = feather('crosshair');
 export const RefreshCw    = feather('refresh-cw');
 export const Film         = feather('film');
+export const Headphones   = feather('headphones');
