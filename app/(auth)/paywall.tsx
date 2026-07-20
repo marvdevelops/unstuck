@@ -11,7 +11,7 @@ import { Colors } from '../../constants/colors';
 import { Fonts, FontSizes } from '../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../constants/spacing';
 import { stagger } from '../../constants/animations';
-import { purchaseTier, restorePurchases, PRODUCT_IDS } from '../../lib/iap';
+import { purchaseTier, restorePurchases, PRODUCT_IDS, openWebsiteCheckout } from '../../lib/iap';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { width: W } = Dimensions.get('window');
@@ -69,10 +69,18 @@ export default function Paywall() {
   const [restoring, setRestoring] = useState(false);
 
   const handlePurchase = async (tierKey: 'basic' | 'cohort' | 'vip') => {
+    // Basic is the only tier sold as a real Apple/Google in-app purchase.
+    // Cohort and VIP involve human-delivered coaching and are sold via
+    // website checkout instead — tier upgrades happen server-side after payment.
+    if (tierKey !== 'basic') {
+      await openWebsiteCheckout(tierKey);
+      return;
+    }
+
     setLoading(tierKey);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await purchaseTier(PRODUCT_IDS[tierKey]);
+      await purchaseTier(PRODUCT_IDS.basic);
       // purchaseUpdatedListener in iap.ts handles tier upgrade + navigation
     } catch (err: any) {
       if (err?.code !== 'E_USER_CANCELLED') {
@@ -139,7 +147,9 @@ export default function Paywall() {
                 </View>
                 <View style={styles.priceBlock}>
                   <Text style={[styles.price, { color: tier.accent }]}>{tier.price}</Text>
-                  <Text style={styles.priceNote}>one-time</Text>
+                  <Text style={styles.priceNote}>
+                    {tier.key === 'basic' ? 'one-time' : 'via website'}
+                  </Text>
                 </View>
               </View>
 
@@ -167,7 +177,9 @@ export default function Paywall() {
                   {loading === tier.key ? (
                     <ActivityIndicator color={Colors.white} size="small" />
                   ) : (
-                    <Text style={styles.ctaText}>Get {tier.name}</Text>
+                    <Text style={styles.ctaText}>
+                      {tier.key === 'basic' ? `Get ${tier.name}` : `Continue on Website`}
+                    </Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
