@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/useAuthStore';
 // services (live coaching, Zoom calls) and are sold via website checkout
 // instead, outside Apple's 30% cut.
 export const PRODUCT_IDS = {
-  basic: 'unstuck21_basic', // ₱1,499 DIY — one-time unlock, real Apple IAP
+  basic: 'fullversion', // ₱1,499 DIY — one-time unlock, real Apple IAP (App Store Connect ref: "full-version")
 };
 
 // TODO(Marvin): replace with the real checkout URLs once the website is built.
