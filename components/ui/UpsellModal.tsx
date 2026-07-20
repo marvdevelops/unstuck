@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
 import { Fonts, FontSizes } from '../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../constants/spacing';
-import { purchaseTier, PRODUCT_IDS } from '../../lib/iap';
+import { purchaseTier, PRODUCT_IDS, openWebsiteCheckout } from '../../lib/iap';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Check } from '../../lib/icons';
 
@@ -83,9 +83,18 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
   if (userTierIdx >= upsellTierIdx) return null;
 
   const handlePurchase = async () => {
+    // Basic is the only tier sold as a real Apple/Google in-app purchase.
+    // Cohort and VIP involve human-delivered coaching and are sold via
+    // website checkout instead — tier upgrades happen server-side after payment.
+    if (config.tier !== 'basic') {
+      await openWebsiteCheckout(config.tier);
+      onDismiss();
+      return;
+    }
+
     setLoading(true);
     try {
-      await purchaseTier(PRODUCT_IDS[config.tier]);
+      await purchaseTier(PRODUCT_IDS.basic);
     } catch (err: any) {
       if (err?.code !== 'E_USER_CANCELLED') {
         Alert.alert('Purchase failed', err.message ?? 'Please try again.');
@@ -145,7 +154,11 @@ export default function UpsellModal({ visible, upsellType, onDismiss }: Props) {
 
           <View style={styles.priceRow}>
             <View>
-              <Text style={styles.priceLabel}>One-time · no subscription</Text>
+              <Text style={styles.priceLabel}>
+                {config.tier === 'basic'
+                  ? 'One-time · no subscription'
+                  : 'One-time · secure checkout on our website'}
+              </Text>
             </View>
             <Text style={[styles.price, { color: config.accent }]}>{config.price}</Text>
           </View>

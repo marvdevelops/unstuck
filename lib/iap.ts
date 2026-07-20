@@ -1,28 +1,48 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import { api } from './api';
 import { useAuthStore } from '../store/useAuthStore';
 
-// Must match product IDs in App Store Connect / Google Play Console
+// The only tier sold as an Apple/Google in-app purchase — a one-time
+// unlock of app content. Cohort, VIP, and Alumni involve human-delivered
+// services (live coaching, Zoom calls) and are sold via website checkout
+// instead, outside Apple's 30% cut.
 export const PRODUCT_IDS = {
-  basic:  'unstuck21_basic',   // ₱1,499 DIY
-  cohort: 'unstuck21_cohort',  // ₱7,499 Live Cohort
-  vip:    'unstuck21_vip',     // ₱13,999 VIP Breakthrough
-  alumni: 'unstuck21_alumni',  // ₱749 alumni re-entry
+  basic: 'unstuck21_basic', // ₱1,499 DIY — one-time unlock, real Apple IAP
 };
 
+// TODO(Marvin): replace with the real checkout URLs once the website is built.
+export const WEBSITE_CHECKOUT_URLS: Record<'cohort' | 'vip' | 'alumni', string> = {
+  cohort: 'https://unstuck21.com/checkout/cohort',
+  vip:    'https://unstuck21.com/checkout/vip',
+  alumni: 'https://unstuck21.com/checkout/alumni',
+};
+
+// Opens the website checkout for tiers that are NOT sold via Apple IAP
+// (cohort, vip, alumni). Tier upgrades for these happen server-side —
+// via payment-processor webhook or manual admin grant — after checkout.
+export async function openWebsiteCheckout(tier: 'cohort' | 'vip' | 'alumni') {
+  const url = WEBSITE_CHECKOUT_URLS[tier];
+  const canOpen = await Linking.canOpenURL(url);
+  if (!canOpen) {
+    Alert.alert('Unable to open checkout', 'Please try again later.');
+    return;
+  }
+  await Linking.openURL(url);
+}
+
 // ── Mock IAP ──────────────────────────────────────────────────────────────────
-// Set to true while App Store products aren't live yet.
+// Set to true while the App Store product isn't live yet.
 // Shows a realistic confirmation dialog and grants the tier locally (session only).
-// Flip to false once products are approved in App Store Connect.
+// Flip to false once the product is approved in App Store Connect.
 export const MOCK_IAP = true;
 
 const MOCK_PRICES: Record<string, string> = {
-  basic: '₱1,499', cohort: '₱7,499', vip: '₱13,999', alumni: '₱749',
+  basic: '₱1,499',
 };
 
 function mockPurchaseTier(productId: string): Promise<void> {
   const tierEntry = Object.entries(PRODUCT_IDS).find(([, id]) => id === productId);
-  const tier  = (tierEntry?.[0] ?? 'basic') as 'basic' | 'cohort' | 'vip' | 'alumni';
+  const tier  = (tierEntry?.[0] ?? 'basic') as 'basic';
   const price = MOCK_PRICES[tier] ?? '₱1,499';
 
   return new Promise((resolve, reject) => {
