@@ -114,6 +114,35 @@ interface AuthResponse {
   user: UserProfile;
 }
 
+// ── Archive ──────────────────────────────────────────────────────────────────
+
+export interface CycleSnapshotDay {
+  day: number;
+  title: string;
+  videoWatched: boolean;
+  routineDone: number;
+  routineTotal: number;
+  spotDone: number;
+  spotTotal: number;
+  journal: string;
+  celebrated: boolean;
+}
+
+export interface CycleSnapshot {
+  days: CycleSnapshotDay[];
+  coreValues: string[];
+  victoryLog: { mood: string; text: string; date: string }[];
+  stealersLog: Record<string, number>;
+}
+
+export interface ArchiveRecord {
+  id: string;
+  userId: string;
+  snapshot: CycleSnapshot;
+  daysCompleted: number;
+  archivedAt: string;
+}
+
 export const api = {
   auth: {
     register: (email: string, password: string, firstName?: string) =>
@@ -155,6 +184,16 @@ export const api = {
       journal?: string;
       celebrated?: boolean;
     }) => request(`/api/progress/${day}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    resetAll: () => request('/api/progress', { method: 'DELETE' }),
+  },
+
+  archives: {
+    list: () => request<ArchiveRecord[]>('/api/archives'),
+    create: (snapshot: CycleSnapshot, daysCompleted: number) =>
+      request<ArchiveRecord>('/api/archives', {
+        method: 'POST',
+        body: JSON.stringify({ snapshot, days_completed: daysCompleted }),
+      }),
   },
 
   iap: {

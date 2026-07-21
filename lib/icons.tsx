@@ -94,3 +94,4 @@ export const Music        = feather('music');
 export const VolumeX      = feather('volume-x');
 export const LogOut       = feather('log-out');
 export const Edit         = feather('edit-2');
+export const Archive      = feather('archive');

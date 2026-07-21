@@ -212,6 +212,24 @@ export default function Profile() {
         </View>
       </TouchableOpacity>
 
+      {/* ── PAST CYCLES ── */}
+      <TouchableOpacity
+        style={styles.planCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push('/(app)/archive' as any);
+        }}
+        activeOpacity={0.8}
+      >
+        <View style={styles.planInfo}>
+          <Text style={styles.planLabel}>Journey history</Text>
+          <Text style={styles.planValue}>Past cycles</Text>
+        </View>
+        <View style={styles.planCta}>
+          <ChevronRight size={16} color={Colors.tide} />
+        </View>
+      </TouchableOpacity>
+
       {/* ── SETTINGS ── */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Settings</Text>

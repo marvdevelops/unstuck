@@ -1,12 +1,12 @@
 import {
-  Animated, View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView,
+  Animated, View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
-import { Timer, Waves, Layers, Wind, Hand, Moon, Play, Check, Circle } from '../../lib/icons';
+import { Timer, Waves, Layers, Wind, Hand, Moon, Play, Check, Circle, Award, RefreshCw, Archive } from '../../lib/icons';
 import { useUserStore } from '../../store/useUserStore';
 import { useJourneyStore } from '../../store/useJourneyStore';
 import { useToolStore } from '../../store/useToolStore';
@@ -19,6 +19,7 @@ import { Timing, stagger } from '../../constants/animations';
 import AttentionStealers from '../../components/dashboard/AttentionStealers';
 import FluidBlob from '../../components/ui/FluidBlob';
 import UpsellModal from '../../components/ui/UpsellModal';
+import { archiveCurrentCycle, resetJourneyForNewCycle } from '../../lib/journeyReset';
 
 const { width: W } = Dimensions.get('window');
 
@@ -117,6 +118,39 @@ export default function Dashboard() {
   const completedCount = CURRICULUM.filter((d) => isDayComplete(d.day)).length;
   const progressPct    = Math.round((completedCount / 21) * 100);
   const winsCount      = victoryLog.length;
+  const cycleComplete  = completedCount === 21;
+
+  const [resetting, setResetting] = useState(false);
+
+  const doReset = async (shouldArchive: boolean) => {
+    setResetting(true);
+    if (shouldArchive) {
+      const archived = await archiveCurrentCycle();
+      if (!archived) {
+        setResetting(false);
+        Alert.alert(
+          "Couldn't archive",
+          'Check your connection and try again — your progress has not been touched.',
+        );
+        return;
+      }
+    }
+    await resetJourneyForNewCycle();
+    setResetting(false);
+    Alert.alert('Fresh start', "You're back at Day 1. Let's go again.");
+  };
+
+  const handleResetPress = () => {
+    Alert.alert(
+      'Reset your 21-day journey?',
+      'You can archive your current progress, journals, and stats before starting over — or reset without saving.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset without saving', style: 'destructive', onPress: () => doReset(false) },
+        { text: 'Archive & Reset', onPress: () => doReset(true) },
+      ],
+    );
+  };
 
   const stats = [
     { value: `Day ${currentDay}`, label: `of 21 · ${dayData?.phase ?? ''}`, short: `of 21`,    route: '/(app)/journey'   },
@@ -249,30 +283,64 @@ export default function Dashboard() {
           </MotiView>
         )}
 
-        {/* Continue Day */}
-        <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ ...Timing.springs.gentle, delay: 60 }}>
-          <TouchableOpacity style={styles.heroCard} onPress={() => goToDay(currentDay)} activeOpacity={0.9}>
-            {hardStopActive ? (
-              <View style={styles.hardStopRow}>
-                <Text style={styles.hardStopText}>Rest Mode Active</Text>
-              </View>
-            ) : (
-              <>
-                <View>
-                  <Text style={styles.heroCardPhase}>{dayData?.phase}</Text>
-                  <Text style={styles.heroCardTitle}>{dayData?.title}</Text>
+        {/* Cycle complete — graduation card + reset */}
+        {cycleComplete ? (
+          <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ ...Timing.springs.gentle, delay: 60 }}>
+            <LinearGradient colors={Colors.gradients.ctaGold} style={styles.gradCard} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}>
+              <Award size={30} color={Colors.white} strokeWidth={1.5} />
+              <Text style={styles.gradTitle}>21 days complete.</Text>
+              <Text style={styles.gradBody}>You're no longer the same person who started this. Ready to go again?</Text>
+
+              <TouchableOpacity
+                style={styles.gradResetBtn}
+                onPress={handleResetPress}
+                disabled={resetting}
+                activeOpacity={0.85}
+              >
+                {resetting
+                  ? <ActivityIndicator color={Colors.goldText} size="small" />
+                  : <>
+                      <RefreshCw size={14} color={Colors.goldText} />
+                      <Text style={styles.gradResetBtnText}>Reset to Day 1</Text>
+                    </>
+                }
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.gradArchiveLink}
+                onPress={() => router.push('/(app)/archive' as any)}
+                activeOpacity={0.7}
+              >
+                <Archive size={13} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.gradArchiveLinkText}>View past cycles</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </MotiView>
+        ) : (
+          <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ ...Timing.springs.gentle, delay: 60 }}>
+            <TouchableOpacity style={styles.heroCard} onPress={() => goToDay(currentDay)} activeOpacity={0.9}>
+              {hardStopActive ? (
+                <View style={styles.hardStopRow}>
+                  <Text style={styles.hardStopText}>Rest Mode Active</Text>
                 </View>
-                <LinearGradient colors={Colors.gradients.cta} style={styles.continueBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                  <Play size={14} color={Colors.white} />
-                  <Text style={styles.continueBtnText}>Continue Day {currentDay}</Text>
-                </LinearGradient>
-              </>
-            )}
-          </TouchableOpacity>
-        </MotiView>
+              ) : (
+                <>
+                  <View>
+                    <Text style={styles.heroCardPhase}>{dayData?.phase}</Text>
+                    <Text style={styles.heroCardTitle}>{dayData?.title}</Text>
+                  </View>
+                  <LinearGradient colors={Colors.gradients.cta} style={styles.continueBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                    <Play size={14} color={Colors.white} />
+                    <Text style={styles.continueBtnText}>Continue Day {currentDay}</Text>
+                  </LinearGradient>
+                </>
+              )}
+            </TouchableOpacity>
+          </MotiView>
+        )}
 
         {/* Today's practice — horizontal routine chips */}
-        {dayData && dayData.routine.length > 0 && (
+        {!cycleComplete && dayData && dayData.routine.length > 0 && (
           <>
             <SectionRow
               label="Today's practice"
@@ -507,6 +575,30 @@ const styles = StyleSheet.create({
   continueBtnText: { fontFamily: Fonts.bodyBold, fontSize: FontSizes.base, color: Colors.white },
   hardStopRow: { alignItems: 'center', padding: Spacing.sm },
   hardStopText: { fontFamily: Fonts.displayLightItalic, fontSize: FontSizes.base, color: Colors.inkMuted },
+
+  // Cycle-complete graduation card
+  gradCard: {
+    borderRadius: Radius.card,
+    padding: Spacing.lg,
+    alignItems: 'center',
+    gap: 6,
+    ...Shadows.card,
+  },
+  gradTitle: { fontFamily: Fonts.display, fontSize: FontSizes.xl, color: Colors.white, marginTop: 2 },
+  gradBody: {
+    fontFamily: Fonts.body, fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center', lineHeight: 20, marginBottom: 4,
+  },
+  gradResetBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.tag,
+    height: 46, paddingHorizontal: Spacing.lg,
+    alignSelf: 'stretch',
+  },
+  gradResetBtnText: { fontFamily: Fonts.bodyBold, fontSize: FontSizes.base, color: Colors.goldText },
+  gradArchiveLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4, paddingBottom: 2 },
+  gradArchiveLinkText: { fontFamily: Fonts.bodyMedium, fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.85)' },
 
   // Daily Compass widget (Days 16–21)
   compassCard: {

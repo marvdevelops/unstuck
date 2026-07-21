@@ -19,12 +19,11 @@ const ACCOUNT_SCOPED_KEYS = [
   'victory_log',
 ];
 
-// Clears all locally-cached account data so a second user logging in on
-// the same device never inherits the previous user's progress, journals,
-// or onboarding answers.
-export async function resetLocalUserData(): Promise<void> {
-  await AsyncStorage.multiRemove(ACCOUNT_SCOPED_KEYS);
-
+// Deletes all 21 on-device journal entries (SecureStore, with the
+// AsyncStorage fallback used when an entry was too large for SecureStore).
+// Shared by full account resets (logout) and journey-cycle resets (Day 21
+// -> reset to Day 1).
+export async function clearAllJournals(): Promise<void> {
   await Promise.all(
     Array.from({ length: 21 }, (_, i) => i + 1).map(async (day) => {
       const key = `journal_day_${day}`;
@@ -32,6 +31,14 @@ export async function resetLocalUserData(): Promise<void> {
       await AsyncStorage.removeItem(key).catch(() => {});
     }),
   );
+}
+
+// Clears all locally-cached account data so a second user logging in on
+// the same device never inherits the previous user's progress, journals,
+// or onboarding answers.
+export async function resetLocalUserData(): Promise<void> {
+  await AsyncStorage.multiRemove(ACCOUNT_SCOPED_KEYS);
+  await clearAllJournals();
 
   useUserStore.setState({
     onboarding: {},

@@ -29,6 +29,8 @@ const HIDDEN: string[] = [
   'day',
   'day/[id]',
   'victories',
+  'archive',
+  'archive/[id]',
 ];
 
 function TabIcon({ Icon, focused }: { Icon: React.ComponentType<any>; focused: boolean }) {
@@ -54,7 +56,7 @@ function ToolsFAB() {
 }
 
 // Routes where the bottom bar + FAB must be hidden (full-screen experiences)
-const FULLSCREEN_ROUTES = ['tools', 'day', 'victories'];
+const FULLSCREEN_ROUTES = ['tools', 'day', 'victories', 'archive'];
 
 export default function AppLayout() {
   const zenMode = useToolStore((s) => s.zenMode);
