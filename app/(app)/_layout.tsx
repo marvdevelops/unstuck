@@ -1,5 +1,6 @@
 import { View, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
 import { Tabs, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Home, Map, User, Zap } from '../../lib/icons';
 import { MotiView } from 'moti';
 import { Colors } from '../../constants/colors';
@@ -67,6 +68,10 @@ export default function AppLayout() {
 
   return (
     <View style={styles.root}>
+      {/* Overrides the root layout's StatusBar while this screen is mounted —
+          expo-status-bar merges nested instances, deepest wins. Fully hides
+          the clock/battery/signal bar on immersive full-screen experiences. */}
+      <StatusBar hidden={isFullscreen} animated />
       <Tabs
         screenOptions={{
           headerShown: false,
