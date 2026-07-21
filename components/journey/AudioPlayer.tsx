@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable, LayoutChangeEvent } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
 import { useAudioStore } from '../../store/useAudioStore';
 import { Colors } from '../../constants/colors';
 import { FontSizes, Fonts } from '../../constants/typography';
@@ -47,6 +48,7 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
   const setAmbientVolume = useAudioStore((s) => s.setAmbientVolume);
   const soundRef = useRef<Audio.Sound | null>(null);
   const trackWidthRef = useRef(0);
+  const isFocused = useIsFocused();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
@@ -67,6 +69,15 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
   useEffect(() => {
     if (!watched && progress >= 0.9 && durationMs > 0) onMarkWatched();
   }, [progress, watched]);
+
+  // Tab screens stay mounted when you navigate away (React Navigation
+  // doesn't unmount them), so unmount-based cleanup never fires. Pause
+  // explicitly whenever this screen loses focus.
+  useEffect(() => {
+    if (!isFocused) {
+      soundRef.current?.pauseAsync();
+    }
+  }, [isFocused]);
 
   // Load audio on mount
   useEffect(() => {

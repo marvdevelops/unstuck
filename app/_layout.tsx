@@ -26,6 +26,7 @@ import { useToolStore } from '../store/useToolStore';
 import { useTrialStore } from '../store/useTrialStore';
 import AmbientPlayer from '../components/ui/AmbientPlayer';
 import { setupIAP, teardownIAP } from '../lib/iap';
+import { checkAndPromptForUpdate } from '../lib/updates';
 import {
   requestNotificationPermission,
   hasAskedPermission,
@@ -88,6 +89,13 @@ function AuthGuard() {
   return null;
 }
 
+function UpdateManager() {
+  useEffect(() => {
+    checkAndPromptForUpdate();
+  }, []);
+  return null;
+}
+
 function IAPManager() {
   useEffect(() => {
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
@@ -145,6 +153,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="auto" translucent backgroundColor="transparent" />
       <AuthGuard />
+      <UpdateManager />
       <IAPManager />
       <NotificationManager />
       <AmbientPlayer />

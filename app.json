@@ -7,6 +7,12 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0c4b588e-d4d5-4576-8aa3-449e649c0c60"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.unstuck.twentyone",
