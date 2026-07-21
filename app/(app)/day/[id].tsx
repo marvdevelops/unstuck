@@ -104,7 +104,7 @@ export default function DayWorkspace() {
     setTimeout(() => confettiRef.current?.start(), 50);
 
     if (userTier === 'free') {
-      if (dayNum === 1) {
+      if (dayNum === FREE_DAY_LIMIT) {
         setTimeout(() => setUpsellType('basic'), 3500);
       } else if (dayNum === 3 && (accountabilityStyle === 'community' || accountabilityStyle === 'accountability_partner')) {
         setTimeout(() => setUpsellType('cohort'), 3500);
