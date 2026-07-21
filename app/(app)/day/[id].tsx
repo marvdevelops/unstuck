@@ -18,6 +18,7 @@ import UpsellModal from '../../../components/ui/UpsellModal';
 import CoreValuesWizard from '../../../components/journey/CoreValuesWizard';
 import { sendCompletionNotification } from '../../../lib/notifications';
 import { CURRICULUM } from '../../../constants/curriculum';
+import { COMPLETION_COPY } from '../../../constants/completionCopy';
 import { Colors } from '../../../constants/colors';
 import { Fonts, FontSizes } from '../../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../../constants/spacing';
@@ -395,9 +396,9 @@ export default function DayWorkspace() {
             >
               <Award size={34} color={Colors.white} strokeWidth={1.5} />
             </LinearGradient>
-            <Text style={styles.modalTitle}>Day {dayNum} done.</Text>
+            <Text style={styles.modalTitle}>{COMPLETION_COPY[dayNum]?.title ?? `Day ${dayNum} done.`}</Text>
             <Text style={styles.modalBody}>
-              You showed up. That's the compound effect in motion.
+              {COMPLETION_COPY[dayNum]?.body ?? "You showed up. That's the compound effect in motion."}
             </Text>
 
             {dayNum < 21 && (
