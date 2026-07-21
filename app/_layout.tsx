@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator, Platform, Alert } from 'react-native';
 import {
   useFonts,
   Fraunces_300Light,
@@ -27,6 +27,7 @@ import { useTrialStore } from '../store/useTrialStore';
 import AmbientPlayer from '../components/ui/AmbientPlayer';
 import { setupIAP, teardownIAP } from '../lib/iap';
 import { checkAndPromptForUpdate } from '../lib/updates';
+import { onSessionKicked } from '../lib/api';
 import {
   requestNotificationPermission,
   hasAskedPermission,
@@ -86,6 +87,22 @@ function AuthGuard() {
     if (!inApp && !onPaywall) router.replace('/(app)/');
   }, [user, loading, onboardingComplete, segments]);
 
+  return null;
+}
+
+function SessionKickedManager() {
+  useEffect(() => {
+    return onSessionKicked(() => {
+      // Tokens are already cleared by tryRefresh(); logout() additionally
+      // wipes cached progress/journals so a shared-then-revoked device
+      // doesn't keep showing another account's data.
+      useAuthStore.getState().logout();
+      Alert.alert(
+        "You've been logged out",
+        'Your account was signed in on another device, so this session was ended. Unstuck 21 allows one active login at a time.',
+      );
+    });
+  }, []);
   return null;
 }
 
@@ -153,6 +170,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="auto" translucent backgroundColor="transparent" />
       <AuthGuard />
+      <SessionKickedManager />
       <UpdateManager />
       <IAPManager />
       <NotificationManager />

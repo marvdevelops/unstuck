@@ -51,6 +51,17 @@ async function request<T>(
   return data as T;
 }
 
+// Fired when a refresh token that existed on-device gets rejected by the
+// server — i.e. the session was revoked (most commonly: the account was
+// logged into elsewhere, which signs out every other device). Not fired
+// for a plain "never logged in" or offline state.
+type Listener = () => void;
+let sessionKickedListeners: Listener[] = [];
+export function onSessionKicked(cb: Listener): () => void {
+  sessionKickedListeners.push(cb);
+  return () => { sessionKickedListeners = sessionKickedListeners.filter((l) => l !== cb); };
+}
+
 async function tryRefresh(): Promise<boolean> {
   const refreshToken = await SecureStore.getItemAsync(KEYS.refreshToken);
   if (!refreshToken) return false;
@@ -60,11 +71,16 @@ async function tryRefresh(): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      await clearTokens();
+      sessionKickedListeners.forEach((cb) => cb());
+      return false;
+    }
     const { accessToken, refreshToken: newRefresh } = await res.json();
     await saveTokens(accessToken, newRefresh);
     return true;
   } catch {
+    // Network error (e.g. offline) — don't treat as a kicked session
     return false;
   }
 }
