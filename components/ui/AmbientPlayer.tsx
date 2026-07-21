@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { TouchableOpacity, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
 import { useAudioStore } from '../../store/useAudioStore';
 import { Colors } from '../../constants/colors';
+import { Music, VolumeX } from '../../lib/icons';
 
 // Drop your ambient MP3 URL here (Cloudflare R2 or any HTTPS link)
 const AMBIENT_URL = process.env.EXPO_PUBLIC_AMBIENT_URL ?? '';
@@ -49,7 +50,10 @@ export default function AmbientPlayer() {
 
   return (
     <TouchableOpacity style={styles.btn} onPress={toggleAmbient} activeOpacity={0.8}>
-      <Text style={styles.icon}>{ambientEnabled ? '🎵' : '🔇'}</Text>
+      {ambientEnabled
+        ? <Music size={18} color={Colors.tide} />
+        : <VolumeX size={18} color={Colors.inkFaint} />
+      }
     </TouchableOpacity>
   );
 }
@@ -72,5 +76,4 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  icon: { fontSize: 18 },
 });

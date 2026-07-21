@@ -90,3 +90,7 @@ export const Crosshair    = feather('crosshair');
 export const RefreshCw    = feather('refresh-cw');
 export const Film         = feather('film');
 export const Headphones   = feather('headphones');
+export const Music        = feather('music');
+export const VolumeX      = feather('volume-x');
+export const LogOut       = feather('log-out');
+export const Edit         = feather('edit-2');

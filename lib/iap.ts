@@ -58,7 +58,7 @@ function mockPurchaseTier(productId: string): Promise<void> {
             if (user) {
               useAuthStore.getState().updateUser({ ...user, tier });
             }
-            Alert.alert('Purchase successful! 🎉', 'Your tier has been upgraded.');
+            Alert.alert('Purchase successful!', 'Your tier has been upgraded.');
             resolve();
           },
         },
@@ -110,7 +110,7 @@ export async function setupIAP() {
         const { user } = await api.iap.verify(platform, receipt, purchase.productId);
         useAuthStore.getState().updateUser(user);
         await lib.finishTransaction({ purchase, isConsumable: false });
-        Alert.alert('Purchase successful! 🎉', 'Your tier has been upgraded.');
+        Alert.alert('Purchase successful!', 'Your tier has been upgraded.');
       } catch (err: any) {
         Alert.alert('Verification failed', err.message ?? 'Please contact support.');
       }

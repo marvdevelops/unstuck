@@ -28,6 +28,7 @@ interface UserStore {
   coreValues: string[];
   setOnboardingField: <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => void;
   completeOnboarding: () => Promise<void>;
+  updateOnboarding: (data: Partial<OnboardingData>) => Promise<void>;
   setCoreValues: (values: string[]) => Promise<void>;
   loadFromStorage: () => Promise<void>;
 }
@@ -54,6 +55,19 @@ export const useUserStore = create<UserStore>((set, get) => ({
     set({ onboardingComplete: true });
     try {
       await api.auth.saveOnboarding(onboarding);
+    } catch {
+      // Offline-first — local state is source of truth; will sync on next app open
+    }
+  },
+
+  // Edit journey profile after onboarding is already complete — unlike
+  // completeOnboarding(), this never touches onboardingComplete or the trial clock.
+  updateOnboarding: async (data) => {
+    const merged = { ...get().onboarding, ...data };
+    set({ onboarding: merged });
+    await AsyncStorage.setItem('onboarding_data', JSON.stringify(merged));
+    try {
+      await api.auth.saveOnboarding(merged);
     } catch {
       // Offline-first — local state is source of truth; will sync on next app open
     }

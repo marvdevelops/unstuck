@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, saveTokens, clearTokens, UserProfile } from '../lib/api';
+import { resetLocalUserData } from '../lib/resetLocalData';
 
 interface AuthStore {
   user: UserProfile | null;
@@ -44,6 +45,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ loading: true });
     try { await api.auth.logout(); } catch {}
     await clearTokens();
+    await resetLocalUserData();
     set({ user: null, loading: false });
   },
 

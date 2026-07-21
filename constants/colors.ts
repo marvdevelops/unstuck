@@ -27,6 +27,8 @@ export const Colors = {
   // ── SEMANTIC ──────────────────────────────────────────────────────
   success:      '#3A7A56',
   successLight: '#EBF5EF',
+  error:        '#B04A3A',
+  errorLight:   '#F7EAE7',
 
   // ── DARK SCREENS ──────────────────────────────────────────────────
   darkBase:    '#071A34',

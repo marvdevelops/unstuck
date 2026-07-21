@@ -15,7 +15,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NOTIF_PERMISSION_KEY = 'notif_permission_asked';
 const REMINDER_HOUR_KEY    = 'notif_reminder_hour';
-const DEFAULT_REMINDER_HOUR = 8; // 8 AM
+const REMINDER_MINUTE_KEY  = 'notif_reminder_minute';
+const DEFAULT_REMINDER_HOUR   = 8; // 8:00 AM
+const DEFAULT_REMINDER_MINUTE = 0;
 
 // How the notification looks while app is in foreground
 Notifications.setNotificationHandler({
@@ -68,7 +70,11 @@ const REMINDER_MESSAGES = [
   { title: "You made it this far.", body: "Don't break the streak. Open today's session." },
 ];
 
-export async function scheduleDaily(hour: number = DEFAULT_REMINDER_HOUR, dayNum = 1): Promise<void> {
+export async function scheduleDaily(
+  hour: number = DEFAULT_REMINDER_HOUR,
+  minute: number = DEFAULT_REMINDER_MINUTE,
+  dayNum = 1,
+): Promise<void> {
   // Cancel existing daily reminder
   await Notifications.cancelScheduledNotificationAsync(DAILY_REMINDER_ID).catch(() => {});
 
@@ -85,11 +91,12 @@ export async function scheduleDaily(hour: number = DEFAULT_REMINDER_HOUR, dayNum
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
-      minute: 0,
+      minute,
     },
   });
 
   await AsyncStorage.setItem(REMINDER_HOUR_KEY, String(hour));
+  await AsyncStorage.setItem(REMINDER_MINUTE_KEY, String(minute));
 }
 
 export async function cancelDailyReminder(): Promise<void> {
@@ -101,13 +108,18 @@ export async function getReminderHour(): Promise<number> {
   return stored ? parseInt(stored, 10) : DEFAULT_REMINDER_HOUR;
 }
 
+export async function getReminderMinute(): Promise<number> {
+  const stored = await AsyncStorage.getItem(REMINDER_MINUTE_KEY);
+  return stored ? parseInt(stored, 10) : DEFAULT_REMINDER_MINUTE;
+}
+
 // ── Day-completion celebration ──────────────────────────────────────────────
 
 const COMPLETION_TITLES = [
-  "Day {day} done. 🎯",
-  "You showed up. Again. ✅",
+  "Day {day} done.",
+  "You showed up. Again.",
   "Streak alive. Day {day} complete.",
-  "Compound effect in motion. Day {day} ✓",
+  "Compound effect in motion. Day {day}.",
 ];
 
 const COMPLETION_BODIES = [

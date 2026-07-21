@@ -284,7 +284,8 @@ export default function DayWorkspace() {
               <Text style={styles.journalTitle}>Victory Journal</Text>
             </View>
             <View style={styles.privateBadge}>
-              <Text style={styles.privateBadgeText}>🔒 Encrypted</Text>
+              <Lock size={10} color={Colors.tide} strokeWidth={2} />
+              <Text style={styles.privateBadgeText}>Encrypted</Text>
             </View>
           </View>
 
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
   journalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   journalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   journalTitle: { fontSize: FontSizes.lg, fontFamily: Fonts.display, color: Colors.ink },
-  privateBadge: {},
+  privateBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   privateBadgeText: { fontSize: FontSizes.xs, fontFamily: Fonts.body, color: Colors.inkFaint },
   journalInput: {
     minHeight: 120,
