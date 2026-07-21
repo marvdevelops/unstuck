@@ -52,6 +52,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const { onboarding } = get();
     await AsyncStorage.setItem('onboarding_data', JSON.stringify(onboarding));
     set({ onboardingComplete: true });
+    try {
+      await api.auth.saveOnboarding(onboarding);
+    } catch {
+      // Offline-first — local state is source of truth; will sync on next app open
+    }
   },
 
   setCoreValues: async (values) => {
@@ -90,7 +95,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
           accountability_style: (profile.accountabilityStyle as OnboardingData['accountability_style']) ?? s.onboarding.accountability_style,
           first_name: profile.firstName ?? s.onboarding.first_name,
         },
-        onboardingComplete: !!profile.firstName,
+        // Never let a missing/stale server value downgrade onboarding
+        // that was already completed locally (e.g. saveOnboarding hasn't
+        // synced yet, or the app is offline).
+        onboardingComplete: !!profile.firstName || s.onboardingComplete,
         flags: {
           ...s.flags,
           tier: (profile.tier === 'free' ? 'basic' : profile.tier) as UserTier,
@@ -102,6 +110,14 @@ export const useUserStore = create<UserStore>((set, get) => ({
       // Keep local cache in sync
       if (profile.coreValues?.length) {
         await AsyncStorage.setItem('core_values', JSON.stringify(profile.coreValues));
+      }
+
+      // Self-heal: users who completed onboarding before saveOnboarding()
+      // was wired up have a real local record but a blank server record.
+      // Push it up once so it stops relying on the local-cache fallback.
+      const { onboarding: current, onboardingComplete: completeNow } = get();
+      if (!profile.firstName && completeNow && current.first_name) {
+        api.auth.saveOnboarding(current).catch(() => {});
       }
     } catch {
       // Not logged in yet or offline — local cache stays
