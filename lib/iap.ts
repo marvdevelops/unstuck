@@ -1,6 +1,12 @@
 import { Platform, Alert, Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
 import { useAuthStore } from '../store/useAuthStore';
+
+// Kept as a plain string (not shared/exported) rather than imported into
+// useAuthStore.ts, which would create a circular import (iap.ts already
+// imports useAuthStore). Must match the literal used there.
+const MOCK_TIER_KEY = 'mock_tier_override';
 
 // The only tier sold as an Apple/Google in-app purchase — a one-time
 // unlock of app content. Cohort, VIP, and Alumni involve human-delivered
@@ -53,11 +59,17 @@ function mockPurchaseTier(productId: string): Promise<void> {
         { text: 'Cancel', style: 'cancel', onPress: () => reject({ code: 'E_USER_CANCELLED' }) },
         {
           text: 'Buy',
-          onPress: () => {
+          onPress: async () => {
             const user = useAuthStore.getState().user;
             if (user) {
               useAuthStore.getState().updateUser({ ...user, tier });
             }
+            // Persist the mock grant — the in-memory update above is
+            // lost on the next loadCurrentUser() (app reload, foreground,
+            // etc.), which would otherwise silently revert the tier to
+            // whatever the backend still has (nothing, since this never
+            // touches the real IAP/receipt flow).
+            await AsyncStorage.setItem(MOCK_TIER_KEY, tier);
             Alert.alert('Purchase successful!', 'Your tier has been upgraded.');
             resolve();
           },

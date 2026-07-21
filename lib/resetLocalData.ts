@@ -10,6 +10,7 @@ import { useTrialStore } from '../store/useTrialStore';
 const ACCOUNT_SCOPED_KEYS = [
   'onboarding_data',
   'user_tier',
+  'mock_tier_override',
   'core_values',
   'journey_progress',
   'hard_stop_active',
@@ -36,7 +37,7 @@ export async function resetLocalUserData(): Promise<void> {
     onboarding: {},
     onboardingComplete: false,
     coreValues: [],
-    flags: { tier: 'basic', is_alumni: false, cohort_active: false, vip_flag: false },
+    flags: { tier: 'free', is_alumni: false, cohort_active: false, vip_flag: false },
   });
   useJourneyStore.setState({ progress: {}, currentDay: 1, hardStopActive: false });
   useToolStore.setState({ zenMode: false, stealersLog: {}, victoryLog: [] });

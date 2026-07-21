@@ -1,6 +1,11 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, saveTokens, clearTokens, UserProfile } from '../lib/api';
 import { resetLocalUserData } from '../lib/resetLocalData';
+
+// Must match the literal in lib/iap.ts's mockPurchaseTier — see comment
+// there for why this isn't a shared import (circular dependency).
+const MOCK_TIER_KEY = 'mock_tier_override';
 
 interface AuthStore {
   user: UserProfile | null;
@@ -53,7 +58,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ loading: true });
     try {
       const user = await api.auth.me();
-      set({ user, loading: false });
+      // A mock IAP purchase (see lib/iap.ts) never touches the backend,
+      // so the freshly-fetched profile would otherwise silently revert
+      // the tier to whatever the server actually has. Reapply the local
+      // override if one exists, so testing a "purchase" survives reloads.
+      const mockTier = await AsyncStorage.getItem(MOCK_TIER_KEY);
+      set({ user: mockTier ? { ...user, tier: mockTier as UserProfile['tier'] } : user, loading: false });
     } catch {
       set({ user: null, loading: false });
     }
