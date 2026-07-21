@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
+import { useRouter } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { GitBranch, Target, Users, Star, Edit, LogOut, Timer as ClockIcon } from '../../lib/icons';
+import { GitBranch, Target, Users, Star, Edit, LogOut, Timer as ClockIcon, ChevronRight } from '../../lib/icons';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { useUserStore } from '../../store/useUserStore';
@@ -61,6 +62,7 @@ export default function Profile() {
   const { hardStopActive, toggleHardStop, isDayComplete } = useJourneyStore();
   const { ambientEnabled, toggleAmbient } = useAudioStore();
   const logout = useAuthStore((s) => s.logout);
+  const router = useRouter();
 
   const completedCount = CURRICULUM.filter((d) => isDayComplete(d.day)).length;
   const daysLeft = 21 - completedCount;
@@ -188,6 +190,27 @@ export default function Profile() {
           </View>
         </LinearGradient>
       </MotiView>
+
+      {/* ── PLAN ── */}
+      <TouchableOpacity
+        style={styles.planCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push('/(auth)/paywall?voluntary=1' as any);
+        }}
+        activeOpacity={0.8}
+      >
+        <View style={styles.planInfo}>
+          <Text style={styles.planLabel}>Your plan</Text>
+          <Text style={styles.planValue}>{tierLabels[flags.tier] ?? flags.tier}</Text>
+        </View>
+        <View style={styles.planCta}>
+          <Text style={styles.planCtaText}>
+            {flags.tier === 'vip' ? 'View plan' : 'Upgrade'}
+          </Text>
+          <ChevronRight size={16} color={Colors.tide} />
+        </View>
+      </TouchableOpacity>
 
       {/* ── SETTINGS ── */}
       <View style={styles.card}>
@@ -344,6 +367,21 @@ const styles = StyleSheet.create({
   statNum: { fontSize: FontSizes['2xl'], fontFamily: Fonts.display, color: Colors.white },
   statLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.bodyMedium, color: 'rgba(255,255,255,0.6)' },
   statDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.2)' },
+
+  // Plan
+  planCard: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.card,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.sandBorder,
+  },
+  planInfo: { gap: 2 },
+  planLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.body, color: Colors.inkMuted },
+  planValue: { fontSize: FontSizes.base, fontFamily: Fonts.bodyMedium, color: Colors.ink },
+  planCta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  planCtaText: { fontSize: FontSizes.sm, fontFamily: Fonts.bodyMedium, color: Colors.tide },
 
   // Cards
   card: {

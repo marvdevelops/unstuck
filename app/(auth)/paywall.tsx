@@ -6,13 +6,16 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import * as Haptics from 'expo-haptics';
-import { Check } from '../../lib/icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Check, X } from '../../lib/icons';
 import { Colors } from '../../constants/colors';
 import { Fonts, FontSizes } from '../../constants/typography';
 import { Spacing, Radius, Shadows } from '../../constants/spacing';
 import { stagger } from '../../constants/animations';
 import { purchaseTier, restorePurchases, PRODUCT_IDS, openWebsiteCheckout } from '../../lib/iap';
 import { useAuthStore } from '../../store/useAuthStore';
+
+const TIER_ORDER = ['free', 'basic', 'cohort', 'vip'] as const;
 
 const { width: W } = Dimensions.get('window');
 
@@ -65,6 +68,13 @@ const TIERS = [
 ] as const;
 
 export default function Paywall() {
+  const router = useRouter();
+  const { voluntary } = useLocalSearchParams<{ voluntary?: string }>();
+  const isVoluntary = voluntary === '1';
+
+  const userTier = useAuthStore((s) => s.user?.tier ?? 'free');
+  const ownedIdx = TIER_ORDER.indexOf(userTier as typeof TIER_ORDER[number]);
+
   const [loading, setLoading] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
 
@@ -110,6 +120,12 @@ export default function Paywall() {
       end={{ x: 1, y: 1 }}
       style={styles.root}
     >
+      {isVoluntary && (
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <X size={18} color={Colors.darkMuted} />
+        </TouchableOpacity>
+      )}
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -117,27 +133,40 @@ export default function Paywall() {
       >
         {/* Header */}
         <MotiView from={{ opacity: 0, translateY: -12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 600 }}>
-          <Text style={styles.eyebrow}>Your free trial has ended</Text>
-          <Text style={styles.headline}>Continue your{'\n'}transformation</Text>
+          <Text style={styles.eyebrow}>
+            {isVoluntary ? 'Your plan' : 'Your free trial has ended'}
+          </Text>
+          <Text style={styles.headline}>
+            {isVoluntary ? <>Take it{'\n'}further</> : <>Continue your{'\n'}transformation</>}
+          </Text>
           <Text style={styles.subhead}>
-            Choose the plan that fits your journey.{'\n'}
-            One-time payment · no subscription · lifetime access.
+            {isVoluntary
+              ? 'See what each plan unlocks, and upgrade whenever you\'re ready.'
+              : 'Choose the plan that fits your journey.\nOne-time payment · no subscription · lifetime access.'}
           </Text>
         </MotiView>
 
         {/* Tier cards */}
-        {TIERS.map((tier, i) => (
+        {TIERS.map((tier, i) => {
+          const isOwned = ownedIdx >= TIER_ORDER.indexOf(tier.key);
+          return (
           <MotiView
             key={tier.key}
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'spring', damping: 22, delay: stagger(i, 80) + 200 }}
           >
-            <View style={[styles.card, tier.popular && styles.cardPopular]}>
-              {tier.popular && (
+            <View style={[styles.card, tier.popular && styles.cardPopular, isOwned && styles.cardOwned]}>
+              {tier.popular && !isOwned && (
                 <LinearGradient colors={Colors.gradients.success} style={styles.popularBadge} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                   <Text style={styles.popularText}>Most popular</Text>
                 </LinearGradient>
+              )}
+              {isOwned && (
+                <View style={styles.ownedBadge}>
+                  <Check size={11} color={Colors.success} strokeWidth={3} />
+                  <Text style={styles.ownedBadgeText}>Included in your plan</Text>
+                </View>
               )}
 
               <View style={styles.cardHeader}>
@@ -164,28 +193,31 @@ export default function Paywall() {
                 ))}
               </View>
 
-              <TouchableOpacity
-                onPress={() => handlePurchase(tier.key)}
-                disabled={loading !== null}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={tier.gradient}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={styles.ctaBtn}
+              {!isOwned && (
+                <TouchableOpacity
+                  onPress={() => handlePurchase(tier.key)}
+                  disabled={loading !== null}
+                  activeOpacity={0.85}
                 >
-                  {loading === tier.key ? (
-                    <ActivityIndicator color={Colors.white} size="small" />
-                  ) : (
-                    <Text style={styles.ctaText}>
-                      {tier.key === 'basic' ? `Get ${tier.name}` : `Continue on Website`}
-                    </Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={tier.gradient}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={styles.ctaBtn}
+                  >
+                    {loading === tier.key ? (
+                      <ActivityIndicator color={Colors.white} size="small" />
+                    ) : (
+                      <Text style={styles.ctaText}>
+                        {tier.key === 'basic' ? `Get ${tier.name}` : `Continue on Website`}
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
           </MotiView>
-        ))}
+          );
+        })}
 
         {/* Restore */}
         <TouchableOpacity style={styles.restoreBtn} onPress={handleRestore} disabled={restoring}>
@@ -210,6 +242,15 @@ const styles = StyleSheet.create({
   root:    { flex: 1 },
   scroll:  { flex: 1 },
   content: { paddingHorizontal: Spacing.lg, paddingTop: 72, gap: Spacing.md },
+
+  closeBtn: {
+    position: 'absolute',
+    top: 56, right: Spacing.lg,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.darkSurface,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
+  },
 
   eyebrow: {
     fontFamily: Fonts.mono,
@@ -256,6 +297,19 @@ const styles = StyleSheet.create({
     marginBottom: -4,
   },
   popularText: { fontFamily: Fonts.bodyBold, fontSize: FontSizes.xs, color: Colors.white },
+  cardOwned: {
+    borderColor: Colors.success + '40',
+    backgroundColor: 'rgba(58,122,86,0.06)',
+  },
+  ownedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.success + '1A',
+    borderRadius: Radius.tag,
+    paddingHorizontal: 10, paddingVertical: 4,
+    marginBottom: -4,
+  },
+  ownedBadgeText: { fontFamily: Fonts.bodyMedium, fontSize: FontSizes.xs, color: Colors.success },
 
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   tierName:   { fontFamily: Fonts.display, fontSize: FontSizes.xl, color: Colors.white },

@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 export type StuckPattern = 'restart_loop' | 'overwhelm' | 'focus' | 'direction' | 'urgency';
 export type Goal = 'morning_ownership' | 'deep_focus' | 'calm_control' | 'lasting_habit' | 'identity_alignment';
 export type AccountabilityStyle = 'solo' | 'community' | 'direct' | 'flexible';
-export type UserTier = 'basic' | 'cohort' | 'vip';
+export type UserTier = 'free' | 'basic' | 'cohort' | 'vip';
 
 export interface OnboardingData {
   stuck_pattern?: StuckPattern;
@@ -34,7 +34,7 @@ interface UserStore {
 }
 
 const DEFAULT_FLAGS: UserFlags = {
-  tier: 'basic',
+  tier: 'free',
   is_alumni: false,
   cohort_active: false,
   vip_flag: false,
@@ -115,7 +115,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
         onboardingComplete: !!profile.firstName || s.onboardingComplete,
         flags: {
           ...s.flags,
-          tier: (profile.tier === 'free' ? 'basic' : profile.tier) as UserTier,
+          tier: profile.tier as UserTier,
           is_alumni: profile.isAlumni,
           vip_flag: profile.vipFlag,
         },
