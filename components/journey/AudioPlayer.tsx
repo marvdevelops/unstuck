@@ -48,6 +48,9 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
   const setAmbientVolume = useAudioStore((s) => s.setAmbientVolume);
   const soundRef = useRef<Audio.Sound | null>(null);
   const trackWidthRef = useRef(0);
+  // Furthest point actually reached via real playback (not seeking).
+  // Used to block scrubbing ahead of what's been listened to.
+  const maxReachedMsRef = useRef(0);
   const isFocused = useIsFocused();
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -60,7 +63,9 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
   const onStatus = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
     setIsPlaying(status.isPlaying);
-    setPositionMs(status.positionMillis ?? 0);
+    const pos = status.positionMillis ?? 0;
+    setPositionMs(pos);
+    if (pos > maxReachedMsRef.current) maxReachedMsRef.current = pos;
     if (status.durationMillis) setDurationMs(status.durationMillis);
     setAmbientVolume(status.isPlaying ? 0 : 0.2);
   }, []);
@@ -126,7 +131,12 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
     if (!sound || durationMs === 0) return;
     const { locationX } = e.nativeEvent;
     const ratio = Math.min(Math.max(locationX / trackWidthRef.current, 0), 1);
-    await sound.setPositionAsync(Math.floor(ratio * durationMs));
+    const targetMs = ratio * durationMs;
+    // Once the day is already marked listened (e.g. revisiting on a later
+    // day), free scrubbing is fine. Until then, no skipping ahead —
+    // clamp to the furthest point actually reached via playback.
+    const clampedMs = watched ? targetMs : Math.min(targetMs, maxReachedMsRef.current);
+    await sound.setPositionAsync(Math.floor(clampedMs));
   };
 
   return (
@@ -161,16 +171,14 @@ export default function AudioPlayer({ dayNum, watched, onMarkWatched }: Props) {
         <Text style={styles.time}>{durationMs > 0 ? fmt(durationMs) : '--:--'}</Text>
       </View>
 
-      {/* Mark listened */}
-      <TouchableOpacity
-        style={[styles.listenedBtn, watched && styles.listenedBtnActive]}
-        onPress={onMarkWatched}
-      >
+      {/* Listened status — earned automatically at 90% playback, not tappable.
+          No skipping: this can't be forced complete without listening. */}
+      <View style={[styles.listenedBtn, watched && styles.listenedBtnActive]}>
         {watched && <Check size={13} color={Colors.white} />}
         <Text style={[styles.listenedText, watched && styles.listenedTextActive]}>
-          {watched ? 'Listened' : 'Mark Listened'}
+          {watched ? 'Listened' : 'Listen fully to continue'}
         </Text>
-      </TouchableOpacity>
+      </View>
     </View>
   );
 }

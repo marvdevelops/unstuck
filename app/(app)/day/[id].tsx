@@ -83,10 +83,9 @@ export default function DayWorkspace() {
   useEffect(() => {
     if (dayData) {
       initDay(dayNum, dayData.routine.length, dayData.spot.length);
-      // No video for this day — auto-mark watched so it doesn't block completion
-      if (!dayData.videoUrl) {
-        setTimeout(() => markVideoWatched(dayNum), 100);
-      }
+      // Every day now uses the mandatory AudioPlayer (videoUrl is unused
+      // since the video->audio migration) — videoWatched is only ever
+      // earned by actually listening. No auto-mark, no skipping.
     }
   }, [dayNum]);
 
